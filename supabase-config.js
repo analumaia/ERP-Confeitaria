@@ -5,5 +5,5 @@
    Cole os valores abaixo entre as aspas.
    ============================================================ */
 
-window.SUPABASE_URL = 'COLE_AQUI_A_URL_DO_SEU_PROJETO';
-window.SUPABASE_ANON_KEY = 'COLE_AQUI_A_CHAVE_ANON_PUBLIC';
+window.SUPABASE_URL = 'https://padmdfitgxvoalrdmpem.supabase.co';
+window.SUPABASE_ANON_KEY = 'sb_publishable_c9yzdJBF3HXqlhWSyNfRag_jDPOiXzM';

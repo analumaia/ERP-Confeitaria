@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel — ERP Bakeria</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="cabecalho">
+  <div class="container">
+    <div class="cabecalho-interno">
+      <div class="logo-caixa"><img src="logo.png" alt="Bakeria Confeitaria Artesanal"></div>
+      <img class="mascote-cabecalho" src="mascote-cabecalho.png" alt="">
+      <button class="btn-sair" id="btnSair">Sair</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <nav class="abas-modulos" id="abasModulos"></nav>
+
+  <!-- INSUMOS -->
+  <section class="conteudo-modulo" data-modulo="insumos">
+    <div class="barra-modulo">
+      <h2>Insumos</h2>
+      <input type="search" class="campo-busca" placeholder="Buscar insumo..." data-busca="insumos">
+      <button class="btn-novo" data-novo="insumos">+ Novo insumo</button>
+    </div>
+    <div class="lista-cards" data-lista="insumos"></div>
+  </section>
+
+  <!-- PRODUTOS -->
+  <section class="conteudo-modulo" data-modulo="produtos">
+    <div class="barra-modulo">
+      <h2>Produtos</h2>
+      <input type="search" class="campo-busca" placeholder="Buscar produto..." data-busca="produtos">
+      <button class="btn-novo" data-novo="produtos">+ Novo produto</button>
+    </div>
+    <div class="lista-cards" data-lista="produtos"></div>
+  </section>
+
+  <!-- FORNECEDORES -->
+  <section class="conteudo-modulo" data-modulo="fornecedores">
+    <div class="barra-modulo">
+      <h2>Fornecedores</h2>
+      <input type="search" class="campo-busca" placeholder="Buscar fornecedor..." data-busca="fornecedores">
+      <button class="btn-novo" data-novo="fornecedores">+ Novo fornecedor</button>
+    </div>
+    <div class="lista-cards" data-lista="fornecedores"></div>
+  </section>
+
+  <!-- CLIENTES -->
+  <section class="conteudo-modulo" data-modulo="clientes">
+    <div class="barra-modulo">
+      <h2>Clientes</h2>
+      <input type="search" class="campo-busca" placeholder="Buscar cliente..." data-busca="clientes">
+      <button class="btn-novo" data-novo="clientes">+ Novo cliente</button>
+    </div>
+    <div class="lista-cards" data-lista="clientes"></div>
+  </section>
+
+</div>
+
+<!-- MODAL genérico de criar/editar, preenchido dinamicamente pelo JS -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitulo">Novo registro</h3>
+    <form id="modalForm">
+      <div id="modalCampos"></div>
+      <div class="acoes-modal">
+        <button type="button" class="btn-secundario" id="btnCancelarModal">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarModal">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="painel.js"></script>
+</body>
+</html>

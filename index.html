@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrar — ERP Bakeria</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="tela-login">
+  <div class="cartao-login">
+    <div class="logo-caixa"><img src="logo.png" alt="Bakeria Confeitaria Artesanal"></div>
+    <img class="mascote-login" src="mascote-cabecalho.png" alt="">
+    <h1>Painel de gestão</h1>
+    <p class="subtitulo">Entre com seu e-mail e senha</p>
+
+    <div class="mensagem-erro" id="mensagemErro"></div>
+
+    <form id="formLogin">
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" required autocomplete="username">
+      </div>
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-primario" id="btnEntrar">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="login.js"></script>
+</body>
+</html>

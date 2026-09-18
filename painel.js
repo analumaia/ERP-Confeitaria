@@ -97,6 +97,7 @@ const TITULOS_ABA = { estoque: 'Estoque', insumos: 'Insumos', produtos: 'Produto
 const dadosCarregados = {};
 // cache separado dos dados de estoque (join com insumos/produtos, incluindo inativos)
 const dadosEstoque = { insumos: [], produtos: [] };
+let modoBalanco = false;
 let moduloAtivo = 'estoque';
 // modo 'cadastro' -> salva num MODULOS[chave]; modo 'movimento' -> lança em movimentacoes_estoque
 let modoModal = { modo: 'cadastro', chave: null, id: null, tipoItem: null, itemId: null, nomeItem: null };
@@ -449,6 +450,23 @@ function renderizarEstoqueItens(container, itens, tipoItem){
     const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
     const saldo = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
     const abaixoDoMinimo = tipoItem === 'insumo' && item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
+    const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
+
+    const areaSaldo = modoBalanco
+      ? `<div class="linha-info">
+           <span>Contagem física</span>
+           <input type="number" step="0.001" class="campo-busca" style="max-width:120px; padding:6px 10px; text-align:right;"
+             data-contagem data-tipo-item="${tipoItem}" data-item-id="${item.id}"
+             value="${saldo}">
+         </div>`
+      : `<div class="linha-info">
+           <span>Saldo atual</span>
+           <span>${saldo.toLocaleString('pt-BR')} ${unidade}</span>
+         </div>
+         <div class="acoes-item">
+           <button class="btn-acao" data-movimentar="entrada" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">+ Entrada</button>
+           <button class="btn-acao" data-movimentar="saida" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">− Saída</button>
+         </div>`;
 
     return `
       <div class="cartao-item">
@@ -457,24 +475,95 @@ function renderizarEstoqueItens(container, itens, tipoItem){
           ${item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : ''}
           ${abaixoDoMinimo ? '<span class="badge-estoque-baixo">Abaixo do mínimo</span>' : ''}
         </div>
-        <div class="linha-info">
-          <span>Saldo atual</span>
-          <span>${saldo.toLocaleString('pt-BR')}${tipoItem === 'insumo' ? ' ' + item.unidade_medida : ' un'}</span>
-        </div>
-        <div class="acoes-item">
-          <button class="btn-acao" data-movimentar="entrada" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">+ Entrada</button>
-          <button class="btn-acao" data-movimentar="saida" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">− Saída</button>
-        </div>
+        ${areaSaldo}
       </div>
     `;
   }).join('');
 
-  container.querySelectorAll('[data-movimentar]').forEach(botao => {
-    botao.addEventListener('click', () => abrirModalMovimento(
-      botao.dataset.movimentar, botao.dataset.tipoItem, botao.dataset.itemId, botao.dataset.nomeItem
-    ));
-  });
+  if (!modoBalanco){
+    container.querySelectorAll('[data-movimentar]').forEach(botao => {
+      botao.addEventListener('click', () => abrirModalMovimento(
+        botao.dataset.movimentar, botao.dataset.tipoItem, botao.dataset.itemId, botao.dataset.nomeItem
+      ));
+    });
+  }
 }
+
+// --------------------------------------------------------
+// BALANÇO — contagem física que gera ajustes automáticos
+// --------------------------------------------------------
+function ativarModoBalanco(){
+  modoBalanco = true;
+  document.getElementById('barraBalanco').style.display = 'flex';
+  document.getElementById('barraBalanco').style.justifyContent = 'space-between';
+  document.getElementById('barraBalanco').style.alignItems = 'center';
+  document.getElementById('barraBalanco').style.flexWrap = 'wrap';
+  document.getElementById('btnFazerBalanco').style.display = 'none';
+  carregarEstoque();
+}
+
+function sairDoModoBalanco(){
+  modoBalanco = false;
+  document.getElementById('barraBalanco').style.display = 'none';
+  document.getElementById('btnFazerBalanco').style.display = 'inline-block';
+  carregarEstoque();
+}
+
+document.getElementById('btnFazerBalanco').addEventListener('click', ativarModoBalanco);
+document.getElementById('btnCancelarBalanco').addEventListener('click', sairDoModoBalanco);
+
+document.getElementById('btnSalvarBalanco').addEventListener('click', async () => {
+  const campos = document.querySelectorAll('[data-contagem]');
+  const ajustes = [];
+
+  campos.forEach(campo => {
+    const tipoItem = campo.dataset.tipoItem;
+    const itemId = campo.dataset.itemId;
+    const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
+    const item = lista.find(r => String(r.id) === String(itemId));
+    const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
+    const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
+    const saldoAtual = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
+    const contagem = Number(campo.value);
+    const diferenca = Math.round((contagem - saldoAtual) * 1000) / 1000; // evita ruído de ponto flutuante
+
+    if (diferenca !== 0){
+      ajustes.push({
+        tipo_item: tipoItem,
+        item_id: itemId,
+        tipo_movimento: diferenca > 0 ? 'entrada' : 'saida',
+        quantidade: Math.abs(diferenca),
+        origem: 'balanco',
+        observacao: `Ajuste de balanço: sistema tinha ${saldoAtual}, contagem física = ${contagem}`,
+      });
+    }
+  });
+
+  if (ajustes.length === 0){
+    mostrarToast('Nenhuma diferença encontrada — nada pra ajustar.');
+    sairDoModoBalanco();
+    return;
+  }
+
+  if (!window.confirm(`${ajustes.length} item(ns) com diferença. Lançar os ajustes de balanço agora?`)) return;
+
+  const btnSalvar = document.getElementById('btnSalvarBalanco');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('movimentacoes_estoque').insert(ajustes);
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar balanço';
+
+  if (error){
+    mostrarToast('Não foi possível salvar o balanço.', 'erro');
+    return;
+  }
+
+  mostrarToast(`Balanço aplicado — ${ajustes.length} ajuste(s) lançado(s)!`);
+  sairDoModoBalanco();
+});
 
 function nomeDoItem(tipoItem, itemId){
   const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;

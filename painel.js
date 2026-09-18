@@ -444,7 +444,10 @@ function renderizarEstoqueItens(container, itens, tipoItem){
 
   container.innerHTML = itens.map(item => {
     const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
-    const saldo = relacao && relacao.length ? Number(relacao[0].saldo_atual) : 0;
+    // O Supabase pode devolver essa relação como objeto único (1-pra-1) ou
+    // como lista de 1 item, dependendo da versão/detecção da FK — tratamos os dois casos.
+    const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
+    const saldo = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
     const abaixoDoMinimo = tipoItem === 'insumo' && item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
 
     return `

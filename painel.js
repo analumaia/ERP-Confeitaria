@@ -87,10 +87,19 @@ const NOMES_MODULO = {
   fornecedores: 'fornecedores', clientes: 'clientes',
 };
 
+// Estoque não é um cadastro genérico (não tem um único "registro" pra
+// criar/editar/excluir), então fica de fora de MODULOS e é tratado à parte.
+const ABAS = ['estoque', 'insumos', 'produtos', 'fornecedores', 'clientes'];
+const ICONES_ABA = { estoque: '📊', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤' };
+const TITULOS_ABA = { estoque: 'Estoque', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes' };
+
 // cache em memória dos dados carregados de cada módulo, pra busca local
 const dadosCarregados = {};
-let moduloAtivo = 'insumos';
-let modoModal = { chave: null, id: null };
+// cache separado dos dados de estoque (join com insumos/produtos, incluindo inativos)
+const dadosEstoque = { insumos: [], produtos: [] };
+let moduloAtivo = 'estoque';
+// modo 'cadastro' -> salva num MODULOS[chave]; modo 'movimento' -> lança em movimentacoes_estoque
+let modoModal = { modo: 'cadastro', chave: null, id: null, tipoItem: null, itemId: null, nomeItem: null };
 
 // --------------------------------------------------------
 // Autenticação
@@ -123,9 +132,9 @@ function mostrarToast(texto, tipo = 'sucesso'){
 // --------------------------------------------------------
 function montarAbas(){
   const nav = document.getElementById('abasModulos');
-  nav.innerHTML = Object.keys(MODULOS).map(chave => `
+  nav.innerHTML = ABAS.map(chave => `
     <button class="aba-modulo ${chave === moduloAtivo ? 'ativa' : ''}" data-aba="${chave}">
-      <span class="icone">${MODULOS[chave].icone}</span> ${capitalizar(NOMES_MODULO[chave])}
+      <span class="icone">${ICONES_ABA[chave]}</span> ${TITULOS_ABA[chave]}
     </button>
   `).join('');
 
@@ -142,7 +151,9 @@ function trocarAba(chave){
   document.querySelectorAll('.conteudo-modulo').forEach(s => {
     s.classList.toggle('ativo', s.dataset.modulo === chave);
   });
-  if (!dadosCarregados[chave]){
+  if (chave === 'estoque'){
+    carregarEstoque(); // sempre atualiza, pois o saldo muda com frequência
+  } else if (!dadosCarregados[chave]){
     carregarModulo(chave);
   }
 }
@@ -287,7 +298,38 @@ function abrirModal(chave, id){
 
 function fecharModal(){
   modalOverlay.classList.remove('aberto');
-  modoModal = { chave: null, id: null };
+  modoModal = { modo: 'cadastro', chave: null, id: null, tipoItem: null, itemId: null, nomeItem: null };
+}
+
+async function salvarMovimento(){
+  const { tipoMovimento, tipoItem, itemId } = modoModal;
+  const quantidade = Number(document.getElementById('campo_quantidade').value);
+  const observacao = document.getElementById('campo_observacao').value.trim() || null;
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('movimentacoes_estoque').insert({
+    tipo_item: tipoItem,
+    item_id: itemId,
+    tipo_movimento: tipoMovimento,
+    quantidade,
+    origem: 'ajuste_manual',
+    observacao,
+  });
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast('Não foi possível registrar a movimentação.', 'erro');
+    return;
+  }
+
+  mostrarToast('Movimentação registrada!');
+  fecharModal();
+  carregarEstoque();
 }
 
 document.getElementById('btnCancelarModal').addEventListener('click', fecharModal);
@@ -297,6 +339,12 @@ modalOverlay.addEventListener('click', (evento) => {
 
 modalForm.addEventListener('submit', async (evento) => {
   evento.preventDefault();
+
+  if (modoModal.modo === 'movimento'){
+    await salvarMovimento();
+    return;
+  }
+
   const { chave, id } = modoModal;
   const config = MODULOS[chave];
 
@@ -357,7 +405,121 @@ async function confirmarExclusao(chave, id){
 }
 
 // --------------------------------------------------------
+// ESTOQUE — saldo atual (insumos e produtos) + movimentações
+// --------------------------------------------------------
+async function carregarEstoque(){
+  const containerInsumos = document.querySelector('[data-lista-estoque="insumo"]');
+  const containerProdutos = document.querySelector('[data-lista-estoque="produto"]');
+  const containerMovs = document.getElementById('listaMovimentacoes');
+  containerInsumos.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  containerProdutos.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  containerMovs.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+
+  const [respInsumos, respProdutos, respMovs] = await Promise.all([
+    supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').order('nome'),
+    supabaseClient.from('produtos').select('*, estoque_produtos(saldo_atual)').order('nome'),
+    supabaseClient.from('movimentacoes_estoque').select('*').order('criado_em', { ascending: false }).limit(20),
+  ]);
+
+  if (respInsumos.error || respProdutos.error || respMovs.error){
+    mostrarToast('Erro ao carregar o estoque.', 'erro');
+    return;
+  }
+
+  // cache separado do dos cadastros — este é só pra resolver nome de
+  // item no histórico de movimentações, sem interferir na aba Insumos/Produtos
+  dadosEstoque.insumos = respInsumos.data;
+  dadosEstoque.produtos = respProdutos.data;
+
+  renderizarEstoqueItens(containerInsumos, respInsumos.data, 'insumo');
+  renderizarEstoqueItens(containerProdutos, respProdutos.data, 'produto');
+  renderizarMovimentacoes(containerMovs, respMovs.data);
+}
+
+function renderizarEstoqueItens(container, itens, tipoItem){
+  if (itens.length === 0){
+    container.innerHTML = `<div class="lista-vazia">Nenhum ${tipoItem} ativo cadastrado ainda.</div>`;
+    return;
+  }
+
+  container.innerHTML = itens.map(item => {
+    const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
+    const saldo = relacao && relacao.length ? Number(relacao[0].saldo_atual) : 0;
+    const abaixoDoMinimo = tipoItem === 'insumo' && item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
+
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item">
+          <span>${item.nome}</span>
+          ${item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : ''}
+          ${abaixoDoMinimo ? '<span class="badge-estoque-baixo">Abaixo do mínimo</span>' : ''}
+        </div>
+        <div class="linha-info">
+          <span>Saldo atual</span>
+          <span>${saldo.toLocaleString('pt-BR')}${tipoItem === 'insumo' ? ' ' + item.unidade_medida : ' un'}</span>
+        </div>
+        <div class="acoes-item">
+          <button class="btn-acao" data-movimentar="entrada" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">+ Entrada</button>
+          <button class="btn-acao" data-movimentar="saida" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">− Saída</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-movimentar]').forEach(botao => {
+    botao.addEventListener('click', () => abrirModalMovimento(
+      botao.dataset.movimentar, botao.dataset.tipoItem, botao.dataset.itemId, botao.dataset.nomeItem
+    ));
+  });
+}
+
+function nomeDoItem(tipoItem, itemId){
+  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
+  const item = (lista || []).find(r => String(r.id) === String(itemId));
+  return item ? item.nome : '(item removido)';
+}
+
+function renderizarMovimentacoes(container, movs){
+  if (movs.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhuma movimentação registrada ainda.</div>';
+    return;
+  }
+
+  container.innerHTML = movs.map(mov => {
+    const sinal = mov.tipo_movimento === 'entrada' ? '+' : '−';
+    const dataFormatada = new Date(mov.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item"><span>${nomeDoItem(mov.tipo_item, mov.item_id)}</span></div>
+        <div class="linha-info"><span>${dataFormatada}</span><span>${sinal} ${Number(mov.quantidade).toLocaleString('pt-BR')}</span></div>
+        <div class="linha-info"><span>Origem</span><span>${mov.origem}</span></div>
+        ${mov.observacao ? `<div class="linha-info"><span>Obs.</span><span>${mov.observacao}</span></div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function abrirModalMovimento(tipoMovimento, tipoItem, itemId, nomeItem){
+  modoModal = { modo: 'movimento', tipoMovimento, tipoItem, itemId, nomeItem };
+
+  modalTitulo.textContent = (tipoMovimento === 'entrada' ? 'Registrar entrada — ' : 'Registrar saída — ') + nomeItem;
+
+  modalCampos.innerHTML = `
+    <div class="form-grupo">
+      <label for="campo_quantidade">Quantidade</label>
+      <input id="campo_quantidade" type="number" step="0.001" min="0.001" required>
+    </div>
+    <div class="form-grupo">
+      <label for="campo_observacao">Observação (opcional)</label>
+      <input id="campo_observacao" type="text" placeholder="Ex: compra do fornecedor X, perda, ajuste de contagem...">
+    </div>
+  `;
+
+  modalOverlay.classList.add('aberto');
+}
+
+// --------------------------------------------------------
 // Início
 // --------------------------------------------------------
 montarAbas();
-carregarModulo(moduloAtivo);
+carregarEstoque();

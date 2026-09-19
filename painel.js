@@ -89,16 +89,16 @@ const NOMES_MODULO = {
 
 // Estoque não é um cadastro genérico (não tem um único "registro" pra
 // criar/editar/excluir), então fica de fora de MODULOS e é tratado à parte.
-const ABAS = ['estoque', 'compras', 'producao', 'vendas', 'financeiro', 'insumos', 'produtos', 'fornecedores', 'clientes'];
-const ICONES_ABA = { estoque: '📊', compras: '🛒', producao: '🏭', vendas: '💰', financeiro: '💵', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤' };
-const TITULOS_ABA = { estoque: 'Estoque', compras: 'Compras', producao: 'Produção', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes' };
+const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'vendas', 'financeiro', 'insumos', 'produtos', 'fornecedores', 'clientes'];
+const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', vendas: '💰', financeiro: '💵', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤' };
+const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes' };
 
 // cache em memória dos dados carregados de cada módulo, pra busca local
 const dadosCarregados = {};
 // cache separado dos dados de estoque (join com insumos/produtos, incluindo inativos)
 const dadosEstoque = { insumos: [], produtos: [] };
 let modoBalanco = false;
-let moduloAtivo = 'estoque';
+let moduloAtivo = 'dashboard';
 // modo 'cadastro' -> salva num MODULOS[chave]; modo 'movimento' -> lança em movimentacoes_estoque
 let modoModal = { modo: 'cadastro', chave: null, id: null, tipoItem: null, itemId: null, nomeItem: null };
 
@@ -152,7 +152,9 @@ function trocarAba(chave){
   document.querySelectorAll('.conteudo-modulo').forEach(s => {
     s.classList.toggle('ativo', s.dataset.modulo === chave);
   });
-  if (chave === 'estoque'){
+  if (chave === 'dashboard'){
+    carregarDashboard();
+  } else if (chave === 'estoque'){
     carregarEstoque(); // sempre atualiza, pois o saldo muda com frequência
   } else if (chave === 'compras'){
     carregarCompras();
@@ -647,9 +649,131 @@ function abrirModalMovimento(tipoMovimento, tipoItem, itemId, nomeItem){
 // Início
 // --------------------------------------------------------
 montarAbas();
-carregarEstoque();
+carregarDashboard();
 document.getElementById('filtroMesFinanceiro').value = new Date().toISOString().slice(0, 7);
 document.getElementById('filtroMesFinanceiro').addEventListener('change', carregarFinanceiro);
+
+// --------------------------------------------------------
+// DASHBOARD — visão geral estratégica: só o que pede decisão
+// --------------------------------------------------------
+function limitesDoMesAtual(offsetMeses = 0){
+  const hoje = new Date();
+  const referencia = new Date(hoje.getFullYear(), hoje.getMonth() + offsetMeses, 1);
+  const mesAno = referencia.toISOString().slice(0, 7);
+  return limitesDoMes(mesAno);
+}
+
+async function carregarDashboard(){
+  const container = document.getElementById('listaDashboard');
+  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+
+  const mesAtual = limitesDoMesAtual(0);
+  const mesAnterior = limitesDoMesAtual(-1);
+
+  const [
+    respFinanceiroAtual, respFinanceiroAnterior,
+    respInsumos, respComprasAbertas, respVendasAbertas,
+    respProdutos, respPedidoItensMes, respProducoesMes,
+  ] = await Promise.all([
+    supabaseClient.from('lancamentos_financeiros').select('tipo, valor').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
+    supabaseClient.from('lancamentos_financeiros').select('tipo, valor').gte('data', mesAnterior.primeiroDia).lte('data', mesAnterior.ultimoDia),
+    supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').eq('ativo', true),
+    supabaseClient.from('compras').select('*, compra_itens(quantidade, custo_unitario)').eq('status', 'pedido'),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario)').eq('status', 'aberto'),
+    supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true),
+    supabaseClient.from('pedido_itens').select('quantidade, produtos(nome), pedidos!inner(status, data_pedido)')
+      .eq('pedidos.status', 'confirmado').gte('pedidos.data_pedido', mesAtual.primeiroDia).lte('pedidos.data_pedido', mesAtual.ultimoDia),
+    supabaseClient.from('producoes').select('quantidade_produzida').gte('data_producao', mesAtual.primeiroDia).lte('data_producao', mesAtual.ultimoDia),
+  ]);
+
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const somarTipo = (lista, tipo) => (lista || []).filter(l => l.tipo === tipo).reduce((s, l) => s + Number(l.valor), 0);
+
+  // 1. Saldo financeiro
+  const entradasAtual = somarTipo(respFinanceiroAtual.data, 'entrada');
+  const saidasAtual = somarTipo(respFinanceiroAtual.data, 'saida');
+  const saldoAtual = entradasAtual - saidasAtual;
+  const saldoAnterior = somarTipo(respFinanceiroAnterior.data, 'entrada') - somarTipo(respFinanceiroAnterior.data, 'saida');
+  const corSaldo = saldoAtual >= 0 ? 'var(--verde)' : 'var(--vermelho)';
+
+  // 2. Insumos abaixo do mínimo
+  const insumosAbaixo = (respInsumos.data || []).filter(i => {
+    const rel = i.estoque_insumos;
+    const registro = Array.isArray(rel) ? rel[0] : rel;
+    const saldo = registro ? Number(registro.saldo_atual) : 0;
+    return i.estoque_minimo != null && saldo < Number(i.estoque_minimo);
+  });
+
+  // 3. Compras aguardando recebimento
+  const comprasAbertas = respComprasAbertas.data || [];
+  const totalComprasAbertas = comprasAbertas.reduce((s, c) => s + c.compra_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.custo_unitario), 0), 0);
+
+  // 4. Vendas aguardando confirmação
+  const vendasAbertas = respVendasAbertas.data || [];
+  const totalVendasAbertas = vendasAbertas.reduce((s, v) => s + v.pedido_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.preco_unitario), 0), 0);
+
+  // 5. Produtos sem ficha técnica
+  const produtosSemFicha = (respProdutos.data || []).filter(p => p.ficha_tecnica_itens.length === 0);
+
+  // 6. Produto mais vendido do mês
+  const vendidosPorProduto = {};
+  (respPedidoItensMes.data || []).forEach(item => {
+    const nome = item.produtos ? item.produtos.nome : '(produto removido)';
+    vendidosPorProduto[nome] = (vendidosPorProduto[nome] || 0) + Number(item.quantidade);
+  });
+  const rankingVendidos = Object.entries(vendidosPorProduto).sort((a, b) => b[1] - a[1]);
+  const maisVendido = rankingVendidos[0];
+
+  // 7. Produção do mês
+  const totalProduzido = (respProducoesMes.data || []).reduce((s, p) => s + Number(p.quantidade_produzida), 0);
+
+  const listaNomes = (itens, chaveNome) => itens.slice(0, 5).map(i => `<div class="linha-info"><span>${i[chaveNome]}</span><span></span></div>`).join('')
+    + (itens.length > 5 ? `<div class="linha-info"><span>e mais ${itens.length - 5}...</span><span></span></div>` : '');
+
+  container.innerHTML = `
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Saldo financeiro do mês</span></div>
+      <div class="linha-info" style="font-size:1.35rem; font-weight:700;"><span></span><span style="color:${corSaldo};">${formatarMoeda(saldoAtual)}</span></div>
+      <div class="linha-info"><span>Mês anterior</span><span>${formatarMoeda(saldoAnterior)}</span></div>
+    </div>
+
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="estoque">
+      <div class="titulo-item"><span>Insumos abaixo do mínimo</span>${insumosAbaixo.length > 0 ? '<span class="badge-estoque-baixo">' + insumosAbaixo.length + '</span>' : ''}</div>
+      ${insumosAbaixo.length === 0 ? '<div class="linha-info"><span>Tudo certo por aqui.</span><span></span></div>' : listaNomes(insumosAbaixo, 'nome')}
+    </div>
+
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="compras">
+      <div class="titulo-item"><span>Compras aguardando recebimento</span>${comprasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + comprasAbertas.length + '</span>' : ''}</div>
+      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalComprasAbertas)}</span></div>
+    </div>
+
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="vendas">
+      <div class="titulo-item"><span>Vendas aguardando confirmação</span>${vendasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + vendasAbertas.length + '</span>' : ''}</div>
+      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalVendasAbertas)}</span></div>
+    </div>
+
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
+      <div class="titulo-item"><span>Produtos sem ficha técnica</span>${produtosSemFicha.length > 0 ? '<span class="badge-estoque-baixo">' + produtosSemFicha.length + '</span>' : ''}</div>
+      ${produtosSemFicha.length === 0 ? '<div class="linha-info"><span>Todos os produtos ativos têm ficha.</span><span></span></div>' : listaNomes(produtosSemFicha, 'nome')}
+    </div>
+
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Produto mais vendido no mês</span></div>
+      ${maisVendido
+        ? `<div class="linha-info"><span>${maisVendido[0]}</span><span>${maisVendido[1].toLocaleString('pt-BR')} un.</span></div>`
+        : '<div class="linha-info"><span>Nenhuma venda confirmada este mês ainda.</span><span></span></div>'}
+    </div>
+
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
+      <div class="titulo-item"><span>Produção do mês</span></div>
+      <div class="linha-info"><span>Total produzido</span><span>${totalProduzido.toLocaleString('pt-BR')} un.</span></div>
+    </div>
+  `;
+
+  container.querySelectorAll('[data-ir-aba]').forEach(cartao => {
+    cartao.addEventListener('click', () => trocarAba(cartao.dataset.irAba));
+  });
+}
 
 // --------------------------------------------------------
 // FINANCEIRO

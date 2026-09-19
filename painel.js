@@ -89,9 +89,9 @@ const NOMES_MODULO = {
 
 // Estoque não é um cadastro genérico (não tem um único "registro" pra
 // criar/editar/excluir), então fica de fora de MODULOS e é tratado à parte.
-const ABAS = ['estoque', 'compras', 'insumos', 'produtos', 'fornecedores', 'clientes'];
-const ICONES_ABA = { estoque: '📊', compras: '🛒', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤' };
-const TITULOS_ABA = { estoque: 'Estoque', compras: 'Compras', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes' };
+const ABAS = ['estoque', 'compras', 'producao', 'vendas', 'insumos', 'produtos', 'fornecedores', 'clientes'];
+const ICONES_ABA = { estoque: '📊', compras: '🛒', producao: '🏭', vendas: '💰', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤' };
+const TITULOS_ABA = { estoque: 'Estoque', compras: 'Compras', producao: 'Produção', vendas: 'Vendas', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes' };
 
 // cache em memória dos dados carregados de cada módulo, pra busca local
 const dadosCarregados = {};
@@ -156,6 +156,10 @@ function trocarAba(chave){
     carregarEstoque(); // sempre atualiza, pois o saldo muda com frequência
   } else if (chave === 'compras'){
     carregarCompras();
+  } else if (chave === 'producao'){
+    carregarProducao();
+  } else if (chave === 'vendas'){
+    carregarVendas();
   } else if (!dadosCarregados[chave]){
     carregarModulo(chave);
   }
@@ -350,6 +354,21 @@ modalForm.addEventListener('submit', async (evento) => {
 
   if (modoModal.modo === 'compra'){
     await salvarNovaCompra();
+    return;
+  }
+
+  if (modoModal.modo === 'ficha_tecnica'){
+    await salvarFichaTecnica();
+    return;
+  }
+
+  if (modoModal.modo === 'producao'){
+    await salvarNovaProducao();
+    return;
+  }
+
+  if (modoModal.modo === 'venda'){
+    await salvarNovaVenda();
     return;
   }
 
@@ -622,6 +641,487 @@ function abrirModalMovimento(tipoMovimento, tipoItem, itemId, nomeItem){
 // --------------------------------------------------------
 montarAbas();
 carregarEstoque();
+
+// --------------------------------------------------------
+// VENDAS / PEDIDOS
+// --------------------------------------------------------
+async function carregarVendas(){
+  const container = document.getElementById('listaVendas');
+  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+
+  const { data, error } = await supabaseClient
+    .from('pedidos')
+    .select('*, clientes(nome), pedido_itens(quantidade, preco_unitario, produtos(nome))')
+    .order('criado_em', { ascending: false });
+
+  if (error){
+    container.innerHTML = '<div class="lista-vazia">Não foi possível carregar as vendas.</div>';
+    mostrarToast('Erro ao carregar vendas.', 'erro');
+    return;
+  }
+
+  dadosCarregados.pedidos = data;
+  renderizarVendas(data);
+}
+
+function renderizarVendas(pedidos){
+  const container = document.getElementById('listaVendas');
+  if (pedidos.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhuma venda registrada ainda.</div>';
+    return;
+  }
+
+  container.innerHTML = pedidos.map(pedido => {
+    const total = pedido.pedido_itens.reduce((soma, item) => soma + Number(item.quantidade) * Number(item.preco_unitario), 0);
+    const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
+    const statusLabel = pedido.status === 'confirmado' ? 'Confirmada' : 'Em aberto';
+    const linhasItens = pedido.pedido_itens.map(item => `
+      <div class="linha-info"><span>${item.produtos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} × ${Number(item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+    `).join('');
+
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item">
+          <span>${pedido.clientes ? pedido.clientes.nome : 'Cliente não informado'}</span>
+          ${pedido.status === 'aberto' ? '<span class="badge-estoque-baixo">' + statusLabel + '</span>' : '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">' + statusLabel + '</span>'}
+        </div>
+        <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
+        ${linhasItens}
+        <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
+          <span>Total</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+        </div>
+        <div class="acoes-item">
+          ${pedido.status === 'aberto' ? `<button class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar venda</button>
+          <button class="btn-acao excluir" data-excluir-venda="${pedido.id}">Excluir</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-confirmar-venda]').forEach(botao => {
+    botao.addEventListener('click', () => confirmarVenda(botao.dataset.confirmarVenda));
+  });
+  container.querySelectorAll('[data-excluir-venda]').forEach(botao => {
+    botao.addEventListener('click', () => excluirVenda(botao.dataset.excluirVenda));
+  });
+}
+
+async function confirmarVenda(id){
+  if (!window.confirm('Confirmar esta venda? Isso vai dar saída dos produtos no estoque automaticamente.')) return;
+  const { error } = await supabaseClient.from('pedidos').update({ status: 'confirmado' }).eq('id', id);
+  if (error){
+    mostrarToast('Não foi possível confirmar a venda.', 'erro');
+    return;
+  }
+  mostrarToast('Venda confirmada — estoque atualizado!');
+  carregarVendas();
+}
+
+async function excluirVenda(id){
+  if (!window.confirm('Excluir esta venda? Essa ação não pode ser desfeita.')) return;
+  const { error } = await supabaseClient.from('pedidos').delete().eq('id', id);
+  if (error){
+    mostrarToast('Não foi possível excluir a venda.', 'erro');
+    return;
+  }
+  mostrarToast('Venda excluída.');
+  carregarVendas();
+}
+
+// --------- Nova venda ---------
+document.getElementById('btnNovaVenda').addEventListener('click', abrirModalNovaVenda);
+
+function linhaItemVendaHtml(produtos){
+  const opcoes = produtos.map(p => `<option value="${p.id}" data-preco="${p.preco_venda}">${p.nome}</option>`).join('');
+  return `
+    <div class="form-linha-item-compra" style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end; margin-bottom:10px;">
+      <div>
+        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Produto</label>
+        <select class="venda-produto" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
+          <option value="">Selecione...</option>
+          ${opcoes}
+        </select>
+      </div>
+      <div>
+        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Qtd.</label>
+        <input type="number" step="0.001" min="0.001" class="venda-quantidade" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
+      </div>
+      <div>
+        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Preço unit.</label>
+        <input type="number" step="0.01" min="0" class="venda-preco" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
+      </div>
+      <button type="button" class="btn-acao excluir remover-item-venda" style="padding:9px;">×</button>
+    </div>
+  `;
+}
+
+async function abrirModalNovaVenda(){
+  modoModal = { modo: 'venda' };
+
+  const [respClientes, respProdutos] = await Promise.all([
+    supabaseClient.from('clientes').select('*').order('nome'),
+    supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
+  ]);
+
+  const clientes = respClientes.data || [];
+  const produtosAtivos = respProdutos.data || [];
+
+  modalTitulo.textContent = 'Nova venda';
+  modalCampos.innerHTML = `
+    <div class="form-grupo">
+      <label for="campoCliente">Cliente (opcional)</label>
+      <select id="campoCliente">
+        <option value="">Não informado</option>
+        ${clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-grupo">
+      <label for="campoDataVenda">Data</label>
+      <input type="date" id="campoDataVenda" value="${new Date().toISOString().slice(0, 10)}">
+    </div>
+    <div class="form-grupo">
+      <label>Itens</label>
+      <div id="itensVenda"></div>
+      <button type="button" class="btn-secundario" id="btnAdicionarItemVenda" style="margin-top:4px;">+ Adicionar item</button>
+    </div>
+    <div class="linha-info" style="font-weight:700; font-size:1rem; border-top:1px solid var(--bege); padding-top:8px;">
+      <span>Total</span><span id="totalVenda">R$ 0,00</span>
+    </div>
+  `;
+
+  const itensVenda = document.getElementById('itensVenda');
+
+  function adicionarLinhaItem(){
+    itensVenda.insertAdjacentHTML('beforeend', linhaItemVendaHtml(produtosAtivos));
+  }
+  adicionarLinhaItem();
+
+  document.getElementById('btnAdicionarItemVenda').addEventListener('click', adicionarLinhaItem);
+
+  function recalcularTotal(){
+    let total = 0;
+    itensVenda.querySelectorAll('.form-linha-item-compra').forEach(linha => {
+      const qtd = Number(linha.querySelector('.venda-quantidade').value) || 0;
+      const preco = Number(linha.querySelector('.venda-preco').value) || 0;
+      total += qtd * preco;
+    });
+    document.getElementById('totalVenda').textContent = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  // ao escolher um produto, pré-preenche o preço com o preço de tabela (editável depois)
+  itensVenda.addEventListener('change', (evento) => {
+    if (evento.target.classList.contains('venda-produto')){
+      const opcaoSelecionada = evento.target.selectedOptions[0];
+      const preco = opcaoSelecionada ? opcaoSelecionada.dataset.preco : '';
+      evento.target.closest('.form-linha-item-compra').querySelector('.venda-preco').value = preco || '';
+      recalcularTotal();
+    }
+  });
+
+  itensVenda.addEventListener('input', recalcularTotal);
+  itensVenda.addEventListener('click', (evento) => {
+    if (evento.target.classList.contains('remover-item-venda')){
+      evento.target.closest('.form-linha-item-compra').remove();
+      recalcularTotal();
+    }
+  });
+
+  modalOverlay.classList.add('aberto');
+}
+
+async function salvarNovaVenda(){
+  const clienteId = document.getElementById('campoCliente').value || null;
+  const dataVenda = document.getElementById('campoDataVenda').value;
+
+  const itens = [];
+  document.querySelectorAll('#itensVenda .form-linha-item-compra').forEach(linha => {
+    const produtoId = linha.querySelector('.venda-produto').value;
+    const quantidade = Number(linha.querySelector('.venda-quantidade').value);
+    const precoUnitario = Number(linha.querySelector('.venda-preco').value);
+    if (produtoId && quantidade > 0){
+      itens.push({ produto_id: produtoId, quantidade, preco_unitario: precoUnitario || 0 });
+    }
+  });
+
+  if (itens.length === 0){
+    mostrarToast('Adicione pelo menos um item válido.', 'erro');
+    return;
+  }
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { data: pedidoCriado, error: erroPedido } = await supabaseClient
+    .from('pedidos')
+    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto' })
+    .select()
+    .single();
+
+  if (erroPedido){
+    btnSalvar.disabled = false;
+    btnSalvar.textContent = 'Salvar';
+    mostrarToast('Não foi possível criar a venda.', 'erro');
+    return;
+  }
+
+  const itensComPedidoId = itens.map(item => ({ ...item, pedido_id: pedidoCriado.id }));
+  const { error: erroItens } = await supabaseClient.from('pedido_itens').insert(itensComPedidoId);
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (erroItens){
+    mostrarToast('Venda criada, mas houve erro ao salvar os itens.', 'erro');
+    fecharModal();
+    carregarVendas();
+    return;
+  }
+
+  mostrarToast('Venda registrada em aberto!');
+  fecharModal();
+  carregarVendas();
+}
+
+// --------------------------------------------------------
+// PRODUÇÃO — ficha técnica + registro de produção
+// --------------------------------------------------------
+async function carregarProducao(){
+  const containerFichas = document.getElementById('listaFichasTecnicas');
+  const containerProducoes = document.getElementById('listaProducoes');
+  containerFichas.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  containerProducoes.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+
+  const [respProdutos, respProducoes] = await Promise.all([
+    supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true).order('nome'),
+    supabaseClient.from('producoes').select('*, produtos(nome)').order('criado_em', { ascending: false }).limit(20),
+  ]);
+
+  if (respProdutos.error || respProducoes.error){
+    mostrarToast('Erro ao carregar dados de produção.', 'erro');
+    return;
+  }
+
+  dadosCarregados.produtosComFicha = respProdutos.data;
+  renderizarFichasTecnicas(respProdutos.data);
+  renderizarProducoes(respProducoes.data);
+}
+
+function renderizarFichasTecnicas(produtos){
+  const container = document.getElementById('listaFichasTecnicas');
+  if (produtos.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Cadastre produtos ativos primeiro.</div>';
+    return;
+  }
+
+  container.innerHTML = produtos.map(produto => {
+    const qtdInsumos = produto.ficha_tecnica_itens.length;
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item"><span>${produto.nome}</span></div>
+        <div class="linha-info">
+          <span>Ficha técnica</span>
+          <span>${qtdInsumos > 0 ? qtdInsumos + ' insumo(s)' : 'não cadastrada'}</span>
+        </div>
+        <div class="acoes-item">
+          <button class="btn-acao" data-editar-ficha="${produto.id}" data-nome-produto="${produto.nome}">Editar ficha técnica</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-editar-ficha]').forEach(botao => {
+    botao.addEventListener('click', () => abrirModalFichaTecnica(botao.dataset.editarFicha, botao.dataset.nomeProduto));
+  });
+}
+
+function renderizarProducoes(producoes){
+  const container = document.getElementById('listaProducoes');
+  if (producoes.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhuma produção registrada ainda.</div>';
+    return;
+  }
+
+  container.innerHTML = producoes.map(p => {
+    const dataFormatada = new Date(p.data_producao + 'T00:00:00').toLocaleDateString('pt-BR');
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item"><span>${p.produtos ? p.produtos.nome : '(produto removido)'}</span></div>
+        <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
+        <div class="linha-info"><span>Quantidade produzida</span><span>${Number(p.quantidade_produzida).toLocaleString('pt-BR')}</span></div>
+        ${p.observacao ? `<div class="linha-info"><span>Obs.</span><span>${p.observacao}</span></div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// --------- Editar ficha técnica ---------
+function linhaItemFichaHtml(insumos, insumoSelecionadoId, quantidadeAtual){
+  const opcoes = insumos.map(i => `<option value="${i.id}" ${String(i.id) === String(insumoSelecionadoId) ? 'selected' : ''}>${i.nome} (${i.unidade_medida})</option>`).join('');
+  return `
+    <div class="form-linha-item-compra" style="display:grid; grid-template-columns:2fr 1fr auto; gap:8px; align-items:end; margin-bottom:10px;">
+      <div>
+        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Insumo</label>
+        <select class="ficha-insumo" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
+          <option value="">Selecione...</option>
+          ${opcoes}
+        </select>
+      </div>
+      <div>
+        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Qtd. por unidade</label>
+        <input type="number" step="0.0001" min="0.0001" class="ficha-quantidade" value="${quantidadeAtual != null ? quantidadeAtual : ''}" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
+      </div>
+      <button type="button" class="btn-acao excluir remover-item-ficha" style="padding:9px;">×</button>
+    </div>
+  `;
+}
+
+async function abrirModalFichaTecnica(produtoId, nomeProduto){
+  modoModal = { modo: 'ficha_tecnica', produtoId };
+
+  const [respItensAtuais, respInsumos] = await Promise.all([
+    supabaseClient.from('ficha_tecnica_itens').select('*').eq('produto_id', produtoId),
+    supabaseClient.from('insumos').select('*').eq('ativo', true).order('nome'),
+  ]);
+
+  const itensAtuais = respItensAtuais.data || [];
+  const insumosAtivos = respInsumos.data || [];
+
+  modalTitulo.textContent = 'Ficha técnica — ' + nomeProduto;
+  modalCampos.innerHTML = `
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:0;">Quanto de cada insumo 1 unidade deste produto consome.</p>
+    <div id="itensFicha"></div>
+    <button type="button" class="btn-secundario" id="btnAdicionarItemFicha" style="margin-top:4px;">+ Adicionar insumo</button>
+  `;
+
+  const itensFicha = document.getElementById('itensFicha');
+
+  if (itensAtuais.length === 0){
+    itensFicha.insertAdjacentHTML('beforeend', linhaItemFichaHtml(insumosAtivos, null, null));
+  } else {
+    itensAtuais.forEach(item => {
+      itensFicha.insertAdjacentHTML('beforeend', linhaItemFichaHtml(insumosAtivos, item.insumo_id, item.quantidade));
+    });
+  }
+
+  document.getElementById('btnAdicionarItemFicha').addEventListener('click', () => {
+    itensFicha.insertAdjacentHTML('beforeend', linhaItemFichaHtml(insumosAtivos, null, null));
+  });
+
+  itensFicha.addEventListener('click', (evento) => {
+    if (evento.target.classList.contains('remover-item-ficha')){
+      evento.target.closest('.form-linha-item-compra').remove();
+    }
+  });
+
+  modalOverlay.classList.add('aberto');
+}
+
+async function salvarFichaTecnica(){
+  const { produtoId } = modoModal;
+
+  const itens = [];
+  document.querySelectorAll('#itensFicha .form-linha-item-compra').forEach(linha => {
+    const insumoId = linha.querySelector('.ficha-insumo').value;
+    const quantidade = Number(linha.querySelector('.ficha-quantidade').value);
+    if (insumoId && quantidade > 0){
+      itens.push({ produto_id: produtoId, insumo_id: insumoId, quantidade });
+    }
+  });
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  // substitui a ficha inteira: apaga os itens antigos e insere os atuais
+  const { error: erroDelete } = await supabaseClient.from('ficha_tecnica_itens').delete().eq('produto_id', produtoId);
+  let erroInsert = null;
+  if (!erroDelete && itens.length > 0){
+    ({ error: erroInsert } = await supabaseClient.from('ficha_tecnica_itens').insert(itens));
+  }
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (erroDelete || erroInsert){
+    mostrarToast('Não foi possível salvar a ficha técnica.', 'erro');
+    return;
+  }
+
+  mostrarToast('Ficha técnica salva!');
+  fecharModal();
+  carregarProducao();
+}
+
+// --------- Nova produção ---------
+document.getElementById('btnNovaProducao').addEventListener('click', abrirModalNovaProducao);
+
+async function abrirModalNovaProducao(){
+  modoModal = { modo: 'producao' };
+
+  const { data: produtosAtivos } = await supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true).order('nome');
+
+  modalTitulo.textContent = 'Nova produção';
+  modalCampos.innerHTML = `
+    <div class="form-grupo">
+      <label for="campoProdutoProducao">Produto</label>
+      <select id="campoProdutoProducao">
+        <option value="">Selecione...</option>
+        ${(produtosAtivos || []).map(p => `<option value="${p.id}">${p.nome}${p.ficha_tecnica_itens.length === 0 ? ' (sem ficha técnica)' : ''}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-grupo">
+      <label for="campoQuantidadeProduzida">Quantidade produzida</label>
+      <input type="number" step="0.001" min="0.001" id="campoQuantidadeProduzida">
+    </div>
+    <div class="form-grupo">
+      <label for="campoDataProducao">Data</label>
+      <input type="date" id="campoDataProducao" value="${new Date().toISOString().slice(0, 10)}">
+    </div>
+    <div class="form-grupo">
+      <label for="campoObservacaoProducao">Observação (opcional)</label>
+      <input type="text" id="campoObservacaoProducao">
+    </div>
+    <p style="font-size:0.78rem; color:var(--marrom-cafe);">Se o produto não tiver ficha técnica, a produção é registrada mas nenhum insumo é descontado do estoque.</p>
+  `;
+
+  modalOverlay.classList.add('aberto');
+}
+
+async function salvarNovaProducao(){
+  const produtoId = document.getElementById('campoProdutoProducao').value;
+  const quantidade = Number(document.getElementById('campoQuantidadeProduzida').value);
+  const data = document.getElementById('campoDataProducao').value;
+  const observacao = document.getElementById('campoObservacaoProducao').value.trim() || null;
+
+  if (!produtoId || !quantidade){
+    mostrarToast('Selecione o produto e a quantidade.', 'erro');
+    return;
+  }
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('producoes').insert({
+    produto_id: produtoId,
+    quantidade_produzida: quantidade,
+    data_producao: data,
+    observacao,
+  });
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast('Não foi possível registrar a produção.', 'erro');
+    return;
+  }
+
+  mostrarToast('Produção registrada — estoque atualizado!');
+  fecharModal();
+  carregarProducao();
+}
 
 // --------------------------------------------------------
 // COMPRAS

@@ -500,6 +500,29 @@ h1, h2, h3, .fonte-titulo{
 .toast.erro{ background: var(--vermelho); color: #fff; }
 
 /* ---------------------------------------------------------
+   BARRAS DE PROGRESSO (metas)
+--------------------------------------------------------- */
+.barra-progresso-legenda{
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--marrom-cafe);
+  margin-bottom: 3px;
+}
+.barra-progresso-container{
+  background: var(--bege);
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.barra-progresso-fill{
+  height: 100%;
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

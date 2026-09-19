@@ -89,9 +89,9 @@ const NOMES_MODULO = {
 
 // Estoque não é um cadastro genérico (não tem um único "registro" pra
 // criar/editar/excluir), então fica de fora de MODULOS e é tratado à parte.
-const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'vendas', 'financeiro', 'insumos', 'produtos', 'fornecedores', 'clientes'];
-const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', vendas: '💰', financeiro: '💵', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤' };
-const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes' };
+const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'vendas', 'financeiro', 'insumos', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
+const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', vendas: '💰', financeiro: '💵', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
+const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
 
 // cache em memória dos dados carregados de cada módulo, pra busca local
 const dadosCarregados = {};
@@ -164,6 +164,8 @@ function trocarAba(chave){
     carregarVendas();
   } else if (chave === 'financeiro'){
     carregarFinanceiro();
+  } else if (chave === 'configuracoes'){
+    carregarMetas();
   } else if (!dadosCarregados[chave]){
     carregarModulo(chave);
   }
@@ -378,6 +380,11 @@ modalForm.addEventListener('submit', async (evento) => {
 
   if (modoModal.modo === 'lancamento'){
     await salvarNovoLancamento();
+    return;
+  }
+
+  if (modoModal.modo === 'meta'){
+    await salvarNovaMeta();
     return;
   }
 
@@ -652,6 +659,106 @@ montarAbas();
 carregarDashboard();
 document.getElementById('filtroMesFinanceiro').value = new Date().toISOString().slice(0, 7);
 document.getElementById('filtroMesFinanceiro').addEventListener('change', carregarFinanceiro);
+document.getElementById('filtroMesMetas').value = new Date().toISOString().slice(0, 7);
+document.getElementById('filtroMesMetas').addEventListener('change', carregarMetas);
+
+// --------------------------------------------------------
+// METAS (Configurações)
+// --------------------------------------------------------
+async function carregarMetas(){
+  const mesAno = document.getElementById('filtroMesMetas').value || new Date().toISOString().slice(0, 7);
+  const container = document.getElementById('listaMetas');
+  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+
+  const { data, error } = await supabaseClient.from('metas').select('*').eq('mes_ano', mesAno).order('criado_em');
+
+  if (error){
+    container.innerHTML = '<div class="lista-vazia">Não foi possível carregar as metas.</div>';
+    return;
+  }
+
+  if (data.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhuma meta definida pra este mês ainda.</div>';
+    return;
+  }
+
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  container.innerHTML = data.map(m => `
+    <div class="cartao-item">
+      <div class="titulo-item"><span>${m.nome}</span></div>
+      <div class="linha-info"><span>Meta de faturamento</span><span>${formatarMoeda(Number(m.valor_meta))}</span></div>
+      <div class="acoes-item">
+        <button class="btn-acao excluir" data-excluir-meta="${m.id}">Excluir</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-excluir-meta]').forEach(botao => {
+    botao.addEventListener('click', () => excluirMeta(botao.dataset.excluirMeta));
+  });
+}
+
+async function excluirMeta(id){
+  if (!window.confirm('Excluir esta meta?')) return;
+  const { error } = await supabaseClient.from('metas').delete().eq('id', id);
+  if (error){
+    mostrarToast('Não foi possível excluir a meta.', 'erro');
+    return;
+  }
+  mostrarToast('Meta excluída.');
+  carregarMetas();
+}
+
+document.getElementById('btnNovaMeta').addEventListener('click', () => {
+  modoModal = { modo: 'meta' };
+  const mesAtual = document.getElementById('filtroMesMetas').value || new Date().toISOString().slice(0, 7);
+  modalTitulo.textContent = 'Nova meta mensal';
+  modalCampos.innerHTML = `
+    <div class="form-grupo">
+      <label for="campoNomeMeta">Nome da meta</label>
+      <input type="text" id="campoNomeMeta" placeholder="Ex: Otimista, Realista, Meta do mês..." value="Meta do mês">
+    </div>
+    <div class="form-grupo">
+      <label for="campoMesMeta">Mês</label>
+      <input type="month" id="campoMesMeta" value="${mesAtual}">
+    </div>
+    <div class="form-grupo">
+      <label for="campoValorMeta">Valor de faturamento (R$)</label>
+      <input type="number" step="0.01" min="0.01" id="campoValorMeta" required>
+    </div>
+  `;
+  modalOverlay.classList.add('aberto');
+});
+
+async function salvarNovaMeta(){
+  const nome = document.getElementById('campoNomeMeta').value.trim() || 'Meta do mês';
+  const mesAno = document.getElementById('campoMesMeta').value;
+  const valorMeta = Number(document.getElementById('campoValorMeta').value);
+
+  if (!mesAno || !valorMeta || valorMeta <= 0){
+    mostrarToast('Preencha o mês e um valor válido.', 'erro');
+    return;
+  }
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('metas').insert({ nome, mes_ano: mesAno, valor_meta: valorMeta });
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast('Não foi possível salvar a meta.', 'erro');
+    return;
+  }
+
+  mostrarToast('Meta criada!');
+  fecharModal();
+  carregarMetas();
+  if (moduloAtivo === 'dashboard') carregarDashboard();
+}
 
 // --------------------------------------------------------
 // DASHBOARD — visão geral estratégica: só o que pede decisão
@@ -669,104 +776,191 @@ async function carregarDashboard(){
 
   const mesAtual = limitesDoMesAtual(0);
   const mesAnterior = limitesDoMesAtual(-1);
+  const mesAtualStr = new Date().toISOString().slice(0, 7);
 
   const [
-    respFinanceiroAtual, respFinanceiroAnterior,
-    respInsumos, respComprasAbertas, respVendasAbertas,
-    respProdutos, respPedidoItensMes, respProducoesMes,
+    respFinanceiroAtual,
+    respVendasMesAtual, respVendasMesAnterior,
+    respFichaCustos,
+    respMetas,
+    respInsumos, respComprasAbertas, respVendasAbertas, respProdutos,
+    respProducoesMes,
   ] = await Promise.all([
-    supabaseClient.from('lancamentos_financeiros').select('tipo, valor').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
-    supabaseClient.from('lancamentos_financeiros').select('tipo, valor').gte('data', mesAnterior.primeiroDia).lte('data', mesAnterior.ultimoDia),
+    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, origem').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome))').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
+    supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
+    supabaseClient.from('metas').select('*').eq('mes_ano', mesAtualStr),
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').eq('ativo', true),
     supabaseClient.from('compras').select('*, compra_itens(quantidade, custo_unitario)').eq('status', 'pedido'),
     supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario)').eq('status', 'aberto'),
     supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true),
-    supabaseClient.from('pedido_itens').select('quantidade, produtos(nome), pedidos!inner(status, data_pedido)')
-      .eq('pedidos.status', 'confirmado').gte('pedidos.data_pedido', mesAtual.primeiroDia).lte('pedidos.data_pedido', mesAtual.ultimoDia),
     supabaseClient.from('producoes').select('quantidade_produzida').gte('data_producao', mesAtual.primeiroDia).lte('data_producao', mesAtual.ultimoDia),
   ]);
 
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const somarTipo = (lista, tipo) => (lista || []).filter(l => l.tipo === tipo).reduce((s, l) => s + Number(l.valor), 0);
+  const formatarNum = v => v.toLocaleString('pt-BR');
 
-  // 1. Saldo financeiro
-  const entradasAtual = somarTipo(respFinanceiroAtual.data, 'entrada');
-  const saidasAtual = somarTipo(respFinanceiroAtual.data, 'saida');
-  const saldoAtual = entradasAtual - saidasAtual;
-  const saldoAnterior = somarTipo(respFinanceiroAnterior.data, 'entrada') - somarTipo(respFinanceiroAnterior.data, 'saida');
-  const corSaldo = saldoAtual >= 0 ? 'var(--verde)' : 'var(--vermelho)';
+  // -------- custo estimado por produto, via ficha técnica --------
+  const custoUnitarioPorProduto = {};
+  (respFichaCustos.data || []).forEach(item => {
+    const custoInsumo = item.insumos ? Number(item.insumos.custo_unitario) : 0;
+    custoUnitarioPorProduto[item.produto_id] = (custoUnitarioPorProduto[item.produto_id] || 0) + Number(item.quantidade) * custoInsumo;
+  });
 
-  // 2. Insumos abaixo do mínimo
+  // -------- agregações de um mês de vendas confirmadas --------
+  function agregarVendas(pedidos){
+    let faturamento = 0, produtosVendidos = 0, custoTotal = 0;
+    const vendidosPorProduto = {};
+    pedidos.forEach(pedido => {
+      pedido.pedido_itens.forEach(item => {
+        const valorItem = Number(item.quantidade) * Number(item.preco_unitario);
+        faturamento += valorItem;
+        produtosVendidos += Number(item.quantidade);
+        custoTotal += Number(item.quantidade) * (custoUnitarioPorProduto[item.produto_id] || 0);
+        if (item.produtos){
+          vendidosPorProduto[item.produtos.nome] = (vendidosPorProduto[item.produtos.nome] || 0) + Number(item.quantidade);
+        }
+      });
+    });
+    const quantidadePedidos = pedidos.length;
+    const ticketMedio = quantidadePedidos > 0 ? faturamento / quantidadePedidos : 0;
+    return { faturamento, produtosVendidos, custoTotal, quantidadePedidos, ticketMedio, vendidosPorProduto };
+  }
+
+  const atual = agregarVendas(respVendasMesAtual.data || []);
+  const anterior = agregarVendas(respVendasMesAnterior.data || []);
+
+  const despesasManuais = (respFinanceiroAtual.data || [])
+    .filter(l => l.tipo === 'saida' && l.origem === 'manual')
+    .reduce((s, l) => s + Number(l.valor), 0);
+
+  const margemBruta = atual.faturamento - atual.custoTotal;
+  const margemPercentual = atual.faturamento > 0 ? (margemBruta / atual.faturamento) * 100 : 0;
+  const lucroLiquido = margemBruta - despesasManuais;
+
+  const rankingVendidos = Object.entries(atual.vendidosPorProduto).sort((a, b) => b[1] - a[1]);
+  const maisVendido = rankingVendidos[0];
+
+  // -------- pontos de atenção (mesma lógica de antes) --------
   const insumosAbaixo = (respInsumos.data || []).filter(i => {
     const rel = i.estoque_insumos;
     const registro = Array.isArray(rel) ? rel[0] : rel;
     const saldo = registro ? Number(registro.saldo_atual) : 0;
     return i.estoque_minimo != null && saldo < Number(i.estoque_minimo);
   });
-
-  // 3. Compras aguardando recebimento
   const comprasAbertas = respComprasAbertas.data || [];
   const totalComprasAbertas = comprasAbertas.reduce((s, c) => s + c.compra_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.custo_unitario), 0), 0);
-
-  // 4. Vendas aguardando confirmação
   const vendasAbertas = respVendasAbertas.data || [];
   const totalVendasAbertas = vendasAbertas.reduce((s, v) => s + v.pedido_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.preco_unitario), 0), 0);
-
-  // 5. Produtos sem ficha técnica
   const produtosSemFicha = (respProdutos.data || []).filter(p => p.ficha_tecnica_itens.length === 0);
-
-  // 6. Produto mais vendido do mês
-  const vendidosPorProduto = {};
-  (respPedidoItensMes.data || []).forEach(item => {
-    const nome = item.produtos ? item.produtos.nome : '(produto removido)';
-    vendidosPorProduto[nome] = (vendidosPorProduto[nome] || 0) + Number(item.quantidade);
-  });
-  const rankingVendidos = Object.entries(vendidosPorProduto).sort((a, b) => b[1] - a[1]);
-  const maisVendido = rankingVendidos[0];
-
-  // 7. Produção do mês
   const totalProduzido = (respProducoesMes.data || []).reduce((s, p) => s + Number(p.quantidade_produzida), 0);
+
+  // -------- helpers de render --------
+  function cardKpi(titulo, valorAtual, valorAnterior, formatarFn, aumentoBom = true){
+    const variacao = valorAnterior !== 0 ? ((valorAtual - valorAnterior) / Math.abs(valorAnterior)) * 100 : (valorAtual !== 0 ? 100 : 0);
+    const positivo = variacao >= 0;
+    const corBoa = positivo === aumentoBom;
+    const cor = variacao === 0 ? 'var(--marrom-cafe)' : (corBoa ? 'var(--verde)' : 'var(--vermelho)');
+    const seta = variacao === 0 ? '' : (positivo ? '▲ ' : '▼ ');
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item"><span>${titulo}</span></div>
+        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarFn(valorAtual)}</span></div>
+        <div class="linha-info"><span style="color:${cor}; font-weight:700;">${seta}${Math.abs(variacao).toFixed(0)}%</span><span>Mês ant.: ${formatarFn(valorAnterior)}</span></div>
+      </div>
+    `;
+  }
+
+  function barraProgresso(rotulo, percentual, cor){
+    const percentualExibido = Math.round(percentual);
+    const percentualBarra = Math.min(100, Math.max(0, percentual));
+    return `
+      <div class="barra-progresso-legenda"><span>${rotulo}</span><span>${percentualExibido}%</span></div>
+      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${percentualBarra}%; background:${cor};"></div></div>
+    `;
+  }
+
+  // -------- metas: valor (faturamento atual / meta) e prazo (dias decorridos no mês) --------
+  const hoje = new Date();
+  const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+  const percentualPrazo = (hoje.getDate() / diasNoMes) * 100;
+
+  const cardsMetas = (respMetas.data || []).map(meta => {
+    const percentualValor = (atual.faturamento / Number(meta.valor_meta)) * 100;
+    return `
+      <div class="cartao-item">
+        <div class="titulo-item"><span>${meta.nome}</span></div>
+        ${barraProgresso('Valor (' + formatarMoeda(atual.faturamento) + ' de ' + formatarMoeda(Number(meta.valor_meta)) + ')', percentualValor, 'var(--verde)')}
+        ${barraProgresso('Prazo do mês', percentualPrazo, 'var(--rosa)')}
+      </div>
+    `;
+  }).join('');
 
   const listaNomes = (itens, chaveNome) => itens.slice(0, 5).map(i => `<div class="linha-info"><span>${i[chaveNome]}</span><span></span></div>`).join('')
     + (itens.length > 5 ? `<div class="linha-info"><span>e mais ${itens.length - 5}...</span><span></span></div>` : '');
 
   container.innerHTML = `
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:4px 0 10px;">Desempenho do mês</h3>
+    </div>
+    ${cardKpi('Faturamento', atual.faturamento, anterior.faturamento, formatarMoeda)}
+    ${cardKpi('Quantidade de pedidos', atual.quantidadePedidos, anterior.quantidadePedidos, formatarNum)}
+    ${cardKpi('Produtos vendidos', atual.produtosVendidos, anterior.produtosVendidos, formatarNum)}
+    ${cardKpi('Ticket médio', atual.ticketMedio, anterior.ticketMedio, formatarMoeda)}
+
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Financeiro estratégico</h3>
+      <p style="font-size:0.78rem; color:var(--marrom-cafe); margin:-4px 0 12px;">Custo e margem são estimados a partir da ficha técnica — produtos sem ficha entram com custo zero.</p>
+    </div>
+    ${cardKpi('Custo de produção estimado', atual.custoTotal, anterior.custoTotal, formatarMoeda, false)}
+    ${cardKpi('Margem bruta', margemBruta, anterior.faturamento - anterior.custoTotal, formatarMoeda)}
     <div class="cartao-item">
-      <div class="titulo-item"><span>Saldo financeiro do mês</span></div>
-      <div class="linha-info" style="font-size:1.35rem; font-weight:700;"><span></span><span style="color:${corSaldo};">${formatarMoeda(saldoAtual)}</span></div>
-      <div class="linha-info"><span>Mês anterior</span><span>${formatarMoeda(saldoAnterior)}</span></div>
+      <div class="titulo-item"><span>Margem bruta (%)</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${margemPercentual.toFixed(1)}%</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Despesas manuais do mês</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarMoeda(despesasManuais)}</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Lucro líquido estimado</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</span></div>
     </div>
 
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Metas em andamento</h3>
+    </div>
+    ${cardsMetas || '<div class="lista-vazia" style="grid-column:1/-1;">Nenhuma meta definida pra este mês — cadastre em Configurações.</div>'}
+
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Pontos de atenção</h3>
+    </div>
     <div class="cartao-item" style="cursor:pointer;" data-ir-aba="estoque">
       <div class="titulo-item"><span>Insumos abaixo do mínimo</span>${insumosAbaixo.length > 0 ? '<span class="badge-estoque-baixo">' + insumosAbaixo.length + '</span>' : ''}</div>
       ${insumosAbaixo.length === 0 ? '<div class="linha-info"><span>Tudo certo por aqui.</span><span></span></div>' : listaNomes(insumosAbaixo, 'nome')}
     </div>
-
     <div class="cartao-item" style="cursor:pointer;" data-ir-aba="compras">
       <div class="titulo-item"><span>Compras aguardando recebimento</span>${comprasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + comprasAbertas.length + '</span>' : ''}</div>
       <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalComprasAbertas)}</span></div>
     </div>
-
     <div class="cartao-item" style="cursor:pointer;" data-ir-aba="vendas">
       <div class="titulo-item"><span>Vendas aguardando confirmação</span>${vendasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + vendasAbertas.length + '</span>' : ''}</div>
       <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalVendasAbertas)}</span></div>
     </div>
-
     <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
       <div class="titulo-item"><span>Produtos sem ficha técnica</span>${produtosSemFicha.length > 0 ? '<span class="badge-estoque-baixo">' + produtosSemFicha.length + '</span>' : ''}</div>
       ${produtosSemFicha.length === 0 ? '<div class="linha-info"><span>Todos os produtos ativos têm ficha.</span><span></span></div>' : listaNomes(produtosSemFicha, 'nome')}
     </div>
-
     <div class="cartao-item">
       <div class="titulo-item"><span>Produto mais vendido no mês</span></div>
       ${maisVendido
-        ? `<div class="linha-info"><span>${maisVendido[0]}</span><span>${maisVendido[1].toLocaleString('pt-BR')} un.</span></div>`
+        ? `<div class="linha-info"><span>${maisVendido[0]}</span><span>${formatarNum(maisVendido[1])} un.</span></div>`
         : '<div class="linha-info"><span>Nenhuma venda confirmada este mês ainda.</span><span></span></div>'}
     </div>
-
     <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
       <div class="titulo-item"><span>Produção do mês</span></div>
-      <div class="linha-info"><span>Total produzido</span><span>${totalProduzido.toLocaleString('pt-BR')} un.</span></div>
+      <div class="linha-info"><span>Total produzido</span><span>${formatarNum(totalProduzido)} un.</span></div>
     </div>
   `;
 

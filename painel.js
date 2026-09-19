@@ -710,7 +710,7 @@ async function confirmarVenda(id){
   if (!window.confirm('Confirmar esta venda? Isso vai dar saída dos produtos no estoque automaticamente.')) return;
   const { error } = await supabaseClient.from('pedidos').update({ status: 'confirmado' }).eq('id', id);
   if (error){
-    mostrarToast('Não foi possível confirmar a venda.', 'erro');
+    mostrarToast(error.message || 'Não foi possível confirmar a venda.', 'erro');
     return;
   }
   mostrarToast('Venda confirmada — estoque atualizado!');
@@ -1114,7 +1114,7 @@ async function salvarNovaProducao(){
   btnSalvar.textContent = 'Salvar';
 
   if (error){
-    mostrarToast('Não foi possível registrar a produção.', 'erro');
+    mostrarToast(error.message || 'Não foi possível registrar a produção.', 'erro');
     return;
   }
 

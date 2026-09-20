@@ -101,7 +101,6 @@ const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'C
 const dadosCarregados = {};
 // cache separado dos dados de estoque (join com insumos/produtos, incluindo inativos)
 const dadosEstoque = { insumos: [], produtos: [] };
-let modoBalanco = false;
 let moduloAtivo = 'dashboard';
 // modo 'cadastro' -> salva num MODULOS[chave]; modo 'movimento' -> lança em movimentacoes_estoque
 let modoModal = { modo: 'cadastro', chave: null, id: null, tipoItem: null, itemId: null, nomeItem: null };
@@ -363,6 +362,11 @@ modalForm.addEventListener('submit', async (evento) => {
     return;
   }
 
+  if (modoModal.modo === 'balanco_item'){
+    await salvarBalancoItem();
+    return;
+  }
+
   if (modoModal.modo === 'compra'){
     await salvarNovaCompra();
     return;
@@ -458,65 +462,111 @@ async function confirmarExclusao(chave, id){
 }
 
 // --------------------------------------------------------
-// ESTOQUE — saldo atual (insumos e produtos) + movimentações
+// ESTOQUE — busca um item específico e mostra saldo, resumo
+// e o extrato completo de movimentações dele
 // --------------------------------------------------------
-async function carregarEstoque(){
-  const containerInsumos = document.querySelector('[data-lista-estoque="insumo"]');
-  const containerProdutos = document.querySelector('[data-lista-estoque="produto"]');
-  const containerMovs = document.getElementById('listaMovimentacoes');
-  containerInsumos.innerHTML = '<div class="lista-vazia">Carregando...</div>';
-  containerProdutos.innerHTML = '<div class="lista-vazia">Carregando...</div>';
-  containerMovs.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+let itemEstoqueAtual = null; // { tipoItem, itemId } do item em exibição no momento
 
-  const [respInsumos, respProdutos, respMovs] = await Promise.all([
+async function carregarEstoque(){
+  const [respInsumos, respProdutos] = await Promise.all([
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').order('nome'),
     supabaseClient.from('produtos').select('*, estoque_produtos(saldo_atual)').order('nome'),
-    supabaseClient.from('movimentacoes_estoque').select('*').order('criado_em', { ascending: false }).limit(20),
   ]);
 
-  if (respInsumos.error || respProdutos.error || respMovs.error){
+  if (respInsumos.error || respProdutos.error){
     mostrarToast('Erro ao carregar o estoque.', 'erro');
     return;
   }
 
-  // cache separado do dos cadastros — este é só pra resolver nome de
-  // item no histórico de movimentações, sem interferir na aba Insumos/Produtos
   dadosEstoque.insumos = respInsumos.data;
   dadosEstoque.produtos = respProdutos.data;
 
-  renderizarEstoqueItens(containerInsumos, respInsumos.data, 'insumo');
-  renderizarEstoqueItens(containerProdutos, respProdutos.data, 'produto');
-  renderizarMovimentacoes(containerMovs, respMovs.data);
-  popularFiltroItemMovimentacoes();
+  popularBuscaItemEstoque();
+
+  if (itemEstoqueAtual){
+    buscarItemEstoque(`${itemEstoqueAtual.tipoItem}:${itemEstoqueAtual.itemId}`);
+  }
 }
 
-function popularFiltroItemMovimentacoes(){
-  const select = document.getElementById('filtroItemMovimentacoes');
+function saldoDoItem(tipoItem, item){
+  const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
+  // O Supabase pode devolver essa relação como objeto único (1-pra-1) ou
+  // como lista de 1 item, dependendo da versão/detecção da FK — tratamos os dois casos.
+  const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
+  return registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
+}
+
+function popularBuscaItemEstoque(){
+  const select = document.getElementById('buscaItemEstoque');
   const valorSelecionado = select.value;
+
+  function rotulo(item, tipoItem){
+    const saldo = saldoDoItem(tipoItem, item);
+    const abaixoDoMinimo = item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
+    return (abaixoDoMinimo ? '⚠️ ' : '') + item.nome + (item.ativo === false ? ' (inativo)' : '');
+  }
+
   select.innerHTML = `
-    <option value="">Selecione um insumo ou produto...</option>
+    <option value="">Buscar insumo ou produto...</option>
     <optgroup label="Insumos">
-      ${dadosEstoque.insumos.map(i => `<option value="insumo:${i.id}">${i.nome}${i.ativo === false ? ' (inativo)' : ''}</option>`).join('')}
+      ${dadosEstoque.insumos.map(i => `<option value="insumo:${i.id}">${rotulo(i, 'insumo')}</option>`).join('')}
     </optgroup>
     <optgroup label="Produtos">
-      ${dadosEstoque.produtos.map(p => `<option value="produto:${p.id}">${p.nome}${p.ativo === false ? ' (inativo)' : ''}</option>`).join('')}
+      ${dadosEstoque.produtos.map(p => `<option value="produto:${p.id}">${rotulo(p, 'produto')}</option>`).join('')}
     </optgroup>
   `;
   select.value = valorSelecionado;
 }
 
-document.getElementById('filtroItemMovimentacoes').addEventListener('change', async (evento) => {
-  const valor = evento.target.value;
-  const resumo = document.getElementById('resumoItemMovimentacoes');
-  const tabela = document.getElementById('tabelaItemMovimentacoes');
+document.getElementById('buscaItemEstoque').addEventListener('change', (evento) => buscarItemEstoque(evento.target.value));
+
+async function buscarItemEstoque(valor){
+  const area = document.getElementById('areaItemEstoque');
 
   if (!valor){
-    resumo.innerHTML = '';
-    tabela.innerHTML = '';
+    itemEstoqueAtual = null;
+    area.innerHTML = '<div class="lista-vazia">Busque um insumo ou produto acima pra ver o saldo, o resumo e o extrato completo de movimentações dele.</div>';
     return;
   }
 
   const [tipoItem, itemId] = valor.split(':');
+  itemEstoqueAtual = { tipoItem, itemId };
+
+  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
+  const item = lista.find(r => String(r.id) === String(itemId));
+  if (!item) return;
+
+  const saldoAtual = saldoDoItem(tipoItem, item);
+  const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
+  const abaixoDoMinimo = item.estoque_minimo != null && saldoAtual < Number(item.estoque_minimo);
+
+  area.innerHTML = `
+    <div class="cartao-item" style="margin-bottom:14px;">
+      <div class="titulo-item">
+        <span style="font-size:1.15rem;">${item.nome}</span>
+        ${item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : ''}
+        ${abaixoDoMinimo ? '<span class="badge-estoque-baixo">Abaixo do mínimo</span>' : ''}
+      </div>
+      <div class="acoes-item" style="margin-top:10px;">
+        <button class="btn-acao" id="btnEntradaItem">+ Entrada</button>
+        <button class="btn-acao" id="btnSaidaItem">− Saída</button>
+        <button class="btn-acao" id="btnBalancoItem">📋 Balanço</button>
+      </div>
+    </div>
+    <div class="lista-cards" id="resumoItemEstoque" style="margin-bottom:14px;"></div>
+    <div id="tabelaItemEstoque"></div>
+  `;
+
+  document.getElementById('btnEntradaItem').addEventListener('click', () => abrirModalMovimento('entrada', tipoItem, itemId, item.nome));
+  document.getElementById('btnSaidaItem').addEventListener('click', () => abrirModalMovimento('saida', tipoItem, itemId, item.nome));
+  document.getElementById('btnBalancoItem').addEventListener('click', () => abrirModalBalancoItem(tipoItem, itemId, item.nome, saldoAtual, unidade));
+
+  await carregarExtratoItem(tipoItem, itemId, saldoAtual, unidade);
+}
+
+async function carregarExtratoItem(tipoItem, itemId, saldoAtual, unidade){
+  const resumo = document.getElementById('resumoItemEstoque');
+  const tabela = document.getElementById('tabelaItemEstoque');
   resumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
   tabela.innerHTML = '';
 
@@ -529,34 +579,25 @@ document.getElementById('filtroItemMovimentacoes').addEventListener('change', as
     .limit(300);
 
   if (error){
-    resumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o histórico deste item.</div>';
+    resumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o extrato deste item.</div>';
     return;
   }
-
-  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
-  const item = lista.find(r => String(r.id) === String(itemId));
-  const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
-  const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
-  const saldoAtual = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
-  const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
 
   const totalEntradas = data.filter(m => m.tipo_movimento === 'entrada').reduce((s, m) => s + Number(m.quantidade), 0);
   const totalSaidas = data.filter(m => m.tipo_movimento === 'saida').reduce((s, m) => s + Number(m.quantidade), 0);
 
   resumo.innerHTML = `
-    <div class="lista-cards" style="margin-bottom:14px;">
-      <div class="cartao-item">
-        <div class="titulo-item"><span>Saldo atual</span></div>
-        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${saldoAtual.toLocaleString('pt-BR')} ${unidade}</span></div>
-      </div>
-      <div class="cartao-item">
-        <div class="titulo-item"><span>Total de entradas</span></div>
-        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${totalEntradas.toLocaleString('pt-BR')} ${unidade}</span></div>
-      </div>
-      <div class="cartao-item">
-        <div class="titulo-item"><span>Total de saídas</span></div>
-        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-saida">${totalSaidas.toLocaleString('pt-BR')} ${unidade}</span></div>
-      </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Saldo atual</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${saldoAtual.toLocaleString('pt-BR')} ${unidade}</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Total de entradas</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${totalEntradas.toLocaleString('pt-BR')} ${unidade}</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Total de saídas</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-saida">${totalSaidas.toLocaleString('pt-BR')} ${unidade}</span></div>
     </div>
   `;
 
@@ -569,9 +610,7 @@ document.getElementById('filtroItemMovimentacoes').addEventListener('change', as
     <div class="tabela-container">
       <table class="tabela-movimentacoes">
         <thead>
-          <tr>
-            <th>Data</th><th>Entrada</th><th>Saída</th><th>Origem</th><th>Observação</th>
-          </tr>
+          <tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Origem</th><th>Observação</th></tr>
         </thead>
         <tbody>
           ${data.map(m => {
@@ -590,160 +629,6 @@ document.getElementById('filtroItemMovimentacoes').addEventListener('change', as
       </table>
     </div>
   `;
-});
-
-function renderizarEstoqueItens(container, itens, tipoItem){
-  if (itens.length === 0){
-    container.innerHTML = `<div class="lista-vazia">Nenhum ${tipoItem} ativo cadastrado ainda.</div>`;
-    return;
-  }
-
-  container.innerHTML = itens.map(item => {
-    const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
-    // O Supabase pode devolver essa relação como objeto único (1-pra-1) ou
-    // como lista de 1 item, dependendo da versão/detecção da FK — tratamos os dois casos.
-    const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
-    const saldo = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
-    const abaixoDoMinimo = item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
-    const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
-
-    const areaSaldo = modoBalanco
-      ? `<div class="linha-info">
-           <span>Contagem física</span>
-           <input type="number" step="0.001" class="campo-busca" style="max-width:120px; padding:6px 10px; text-align:right;"
-             data-contagem data-tipo-item="${tipoItem}" data-item-id="${item.id}"
-             value="${saldo}">
-         </div>`
-      : `<div class="linha-info">
-           <span>Saldo atual</span>
-           <span>${saldo.toLocaleString('pt-BR')} ${unidade}</span>
-         </div>
-         <div class="acoes-item">
-           <button class="btn-acao" data-movimentar="entrada" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">+ Entrada</button>
-           <button class="btn-acao" data-movimentar="saida" data-tipo-item="${tipoItem}" data-item-id="${item.id}" data-nome-item="${item.nome}">− Saída</button>
-         </div>`;
-
-    return `
-      <div class="cartao-item">
-        <div class="titulo-item">
-          <span>${item.nome}</span>
-          ${item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : ''}
-          ${abaixoDoMinimo ? '<span class="badge-estoque-baixo">Abaixo do mínimo</span>' : ''}
-        </div>
-        ${areaSaldo}
-      </div>
-    `;
-  }).join('');
-
-  if (!modoBalanco){
-    container.querySelectorAll('[data-movimentar]').forEach(botao => {
-      botao.addEventListener('click', () => abrirModalMovimento(
-        botao.dataset.movimentar, botao.dataset.tipoItem, botao.dataset.itemId, botao.dataset.nomeItem
-      ));
-    });
-  }
-}
-
-// --------------------------------------------------------
-// BALANÇO — contagem física que gera ajustes automáticos
-// --------------------------------------------------------
-function ativarModoBalanco(){
-  modoBalanco = true;
-  document.getElementById('barraBalanco').style.display = 'flex';
-  document.getElementById('barraBalanco').style.justifyContent = 'space-between';
-  document.getElementById('barraBalanco').style.alignItems = 'center';
-  document.getElementById('barraBalanco').style.flexWrap = 'wrap';
-  document.getElementById('btnFazerBalanco').style.display = 'none';
-  carregarEstoque();
-}
-
-function sairDoModoBalanco(){
-  modoBalanco = false;
-  document.getElementById('barraBalanco').style.display = 'none';
-  document.getElementById('btnFazerBalanco').style.display = 'inline-block';
-  carregarEstoque();
-}
-
-document.getElementById('btnFazerBalanco').addEventListener('click', ativarModoBalanco);
-document.getElementById('btnCancelarBalanco').addEventListener('click', sairDoModoBalanco);
-
-document.getElementById('btnSalvarBalanco').addEventListener('click', async () => {
-  const campos = document.querySelectorAll('[data-contagem]');
-  const ajustes = [];
-
-  campos.forEach(campo => {
-    const tipoItem = campo.dataset.tipoItem;
-    const itemId = campo.dataset.itemId;
-    const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
-    const item = lista.find(r => String(r.id) === String(itemId));
-    const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
-    const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
-    const saldoAtual = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
-    const contagem = Number(campo.value);
-    const diferenca = Math.round((contagem - saldoAtual) * 1000) / 1000; // evita ruído de ponto flutuante
-
-    if (diferenca !== 0){
-      ajustes.push({
-        tipo_item: tipoItem,
-        item_id: itemId,
-        tipo_movimento: diferenca > 0 ? 'entrada' : 'saida',
-        quantidade: Math.abs(diferenca),
-        origem: 'balanco',
-        observacao: `Ajuste de balanço: sistema tinha ${saldoAtual}, contagem física = ${contagem}`,
-      });
-    }
-  });
-
-  if (ajustes.length === 0){
-    mostrarToast('Nenhuma diferença encontrada — nada pra ajustar.');
-    sairDoModoBalanco();
-    return;
-  }
-
-  if (!window.confirm(`${ajustes.length} item(ns) com diferença. Lançar os ajustes de balanço agora?`)) return;
-
-  const btnSalvar = document.getElementById('btnSalvarBalanco');
-  btnSalvar.disabled = true;
-  btnSalvar.textContent = 'Salvando...';
-
-  const { error } = await supabaseClient.from('movimentacoes_estoque').insert(ajustes);
-
-  btnSalvar.disabled = false;
-  btnSalvar.textContent = 'Salvar balanço';
-
-  if (error){
-    mostrarToast('Não foi possível salvar o balanço.', 'erro');
-    return;
-  }
-
-  mostrarToast(`Balanço aplicado — ${ajustes.length} ajuste(s) lançado(s)!`);
-  sairDoModoBalanco();
-});
-
-function nomeDoItem(tipoItem, itemId){
-  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
-  const item = (lista || []).find(r => String(r.id) === String(itemId));
-  return item ? item.nome : '(item removido)';
-}
-
-function renderizarMovimentacoes(container, movs){
-  if (movs.length === 0){
-    container.innerHTML = '<div class="lista-vazia">Nenhuma movimentação registrada ainda.</div>';
-    return;
-  }
-
-  container.innerHTML = movs.map(mov => {
-    const sinal = mov.tipo_movimento === 'entrada' ? '+' : '−';
-    const dataFormatada = new Date(mov.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-    return `
-      <div class="cartao-item">
-        <div class="titulo-item"><span>${nomeDoItem(mov.tipo_item, mov.item_id)}</span></div>
-        <div class="linha-info"><span>${dataFormatada}</span><span>${sinal} ${Number(mov.quantidade).toLocaleString('pt-BR')}</span></div>
-        <div class="linha-info"><span>Origem</span><span>${mov.origem}</span></div>
-        ${mov.observacao ? `<div class="linha-info"><span>Obs.</span><span>${mov.observacao}</span></div>` : ''}
-      </div>
-    `;
-  }).join('');
 }
 
 function abrirModalMovimento(tipoMovimento, tipoItem, itemId, nomeItem){
@@ -763,6 +648,62 @@ function abrirModalMovimento(tipoMovimento, tipoItem, itemId, nomeItem){
   `;
 
   modalOverlay.classList.add('aberto');
+}
+
+// --------------------------------------------------------
+// BALANÇO — contagem física de UM item, gera o ajuste sozinho
+// --------------------------------------------------------
+function abrirModalBalancoItem(tipoItem, itemId, nomeItem, saldoAtual, unidade){
+  modoModal = { modo: 'balanco_item', tipoItem, itemId, saldoAtual };
+
+  modalTitulo.textContent = 'Balanço — ' + nomeItem;
+
+  modalCampos.innerHTML = `
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:0;">O sistema tem <strong>${saldoAtual.toLocaleString('pt-BR')} ${unidade}</strong> registrado. Informe o que você contou fisicamente.</p>
+    <div class="form-grupo">
+      <label for="campo_contagem_fisica">Contagem física (${unidade})</label>
+      <input id="campo_contagem_fisica" type="number" step="0.001" min="0" value="${saldoAtual}" required>
+    </div>
+  `;
+
+  modalOverlay.classList.add('aberto');
+}
+
+async function salvarBalancoItem(){
+  const { tipoItem, itemId, saldoAtual } = modoModal;
+  const contagem = Number(document.getElementById('campo_contagem_fisica').value);
+  const diferenca = Math.round((contagem - saldoAtual) * 1000) / 1000; // evita ruído de ponto flutuante
+
+  if (diferenca === 0){
+    mostrarToast('Sem diferença — nada pra ajustar.');
+    fecharModal();
+    return;
+  }
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('movimentacoes_estoque').insert({
+    tipo_item: tipoItem,
+    item_id: itemId,
+    tipo_movimento: diferenca > 0 ? 'entrada' : 'saida',
+    quantidade: Math.abs(diferenca),
+    origem: 'balanco',
+    observacao: `Ajuste de balanço: sistema tinha ${saldoAtual}, contagem física = ${contagem}`,
+  });
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast('Não foi possível salvar o balanço.', 'erro');
+    return;
+  }
+
+  mostrarToast('Balanço aplicado!');
+  fecharModal();
+  carregarEstoque();
 }
 
 // --------------------------------------------------------

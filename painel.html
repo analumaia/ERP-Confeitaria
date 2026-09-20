@@ -32,37 +32,17 @@
 
   <!-- ESTOQUE -->
   <section class="conteudo-modulo" data-modulo="estoque">
+    <div class="barra-modulo"><h2>Estoque</h2></div>
+
     <div class="barra-modulo">
-      <h2>Estoque</h2>
-      <button class="btn-novo" id="btnFazerBalanco">📋 Fazer balanço</button>
-    </div>
-
-    <div class="barra-modulo" id="barraBalanco" style="display:none;">
-      <p style="margin:0; font-size:0.85rem; color:var(--marrom-cafe);">Corrija as quantidades contadas e salve — o sistema lança o ajuste sozinho.</p>
-      <div style="display:flex; gap:10px;">
-        <button class="btn-secundario" id="btnCancelarBalanco" style="flex:none; padding:10px 18px;">Cancelar</button>
-        <button class="btn-primario" id="btnSalvarBalanco" style="margin-top:0; width:auto; padding:10px 18px;">Salvar balanço</button>
-      </div>
-    </div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:18px 0 10px;">Insumos</h3>
-    <div class="lista-cards" data-lista-estoque="insumo"></div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Produtos</h3>
-    <div class="lista-cards" data-lista-estoque="produto"></div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Últimas movimentações</h3>
-    <div class="lista-cards" id="listaMovimentacoes"></div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Histórico completo por item</h3>
-    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Busque um insumo ou produto pra ver todas as movimentações dele, uma por uma.</p>
-    <div class="barra-modulo">
-      <select id="filtroItemMovimentacoes" class="campo-busca" style="max-width:320px;">
-        <option value="">Selecione um insumo ou produto...</option>
+      <select id="buscaItemEstoque" class="campo-busca" style="max-width:380px; font-size:0.95rem; padding:12px 16px;">
+        <option value="">Buscar insumo ou produto...</option>
       </select>
     </div>
-    <div id="resumoItemMovimentacoes"></div>
-    <div id="tabelaItemMovimentacoes"></div>
+
+    <div id="areaItemEstoque">
+      <div class="lista-vazia">Busque um insumo ou produto acima pra ver o saldo, o resumo e o extrato completo de movimentações dele.</div>
+    </div>
   </section>
 
   <!-- COMPRAS -->

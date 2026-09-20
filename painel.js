@@ -42,11 +42,13 @@ const MODULOS = {
       { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Tradicionais, Cookie Pies...' },
       { chave: 'preco_venda', label: 'Preço de venda (R$)', tipo: 'number', passo: '0.01', obrigatorio: true },
       { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
+      { chave: 'valor_frete', label: 'Frete (por unidade vendida, R$)', tipo: 'number', passo: '0.01' },
     ],
     infoCampos: [
       { chave: 'categoria', label: 'Categoria' },
       { chave: 'preco_venda', label: 'Preço', formato: 'moeda' },
       { chave: 'estoque_minimo', label: 'Estoque mín.' },
+      { chave: 'valor_frete', label: 'Frete/un.', formato: 'moeda' },
     ],
   },
   fornecedores: {
@@ -168,6 +170,7 @@ function trocarAba(chave){
     carregarFinanceiro();
   } else if (chave === 'configuracoes'){
     carregarMetas();
+    carregarFormasPagamento();
   } else if (!dadosCarregados[chave]){
     carregarModulo(chave);
   }
@@ -387,6 +390,11 @@ modalForm.addEventListener('submit', async (evento) => {
 
   if (modoModal.modo === 'meta'){
     await salvarNovaMeta();
+    return;
+  }
+
+  if (modoModal.modo === 'forma_pagamento'){
+    await salvarNovaFormaPagamento();
     return;
   }
 
@@ -763,6 +771,97 @@ async function salvarNovaMeta(){
 }
 
 // --------------------------------------------------------
+// FORMAS DE PAGAMENTO (Configurações)
+// --------------------------------------------------------
+async function carregarFormasPagamento(){
+  const container = document.getElementById('listaFormasPagamento');
+  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+
+  const { data, error } = await supabaseClient.from('formas_pagamento').select('*').order('nome');
+
+  if (error){
+    container.innerHTML = '<div class="lista-vazia">Não foi possível carregar as formas de pagamento.</div>';
+    return;
+  }
+
+  dadosCarregados.formasPagamento = data;
+
+  if (data.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhuma forma de pagamento cadastrada — sem isso, a taxa de maquininha do dashboard fica zerada.</div>';
+    return;
+  }
+
+  container.innerHTML = data.map(f => `
+    <div class="cartao-item">
+      <div class="titulo-item"><span>${f.nome}</span></div>
+      <div class="linha-info"><span>Taxa</span><span>${Number(f.taxa_percentual).toLocaleString('pt-BR')}%</span></div>
+      <div class="acoes-item">
+        <button class="btn-acao excluir" data-excluir-forma="${f.id}">Excluir</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-excluir-forma]').forEach(botao => {
+    botao.addEventListener('click', () => excluirFormaPagamento(botao.dataset.excluirForma));
+  });
+}
+
+async function excluirFormaPagamento(id){
+  if (!window.confirm('Excluir esta forma de pagamento? Vendas antigas que já usam ela continuam com a taxa histórica.')) return;
+  const { error } = await supabaseClient.from('formas_pagamento').delete().eq('id', id);
+  if (error){
+    mostrarToast('Não foi possível excluir.', 'erro');
+    return;
+  }
+  mostrarToast('Forma de pagamento excluída.');
+  carregarFormasPagamento();
+}
+
+document.getElementById('btnNovaFormaPagamento').addEventListener('click', () => {
+  modoModal = { modo: 'forma_pagamento' };
+  modalTitulo.textContent = 'Nova forma de pagamento';
+  modalCampos.innerHTML = `
+    <div class="form-grupo">
+      <label for="campoNomeForma">Nome</label>
+      <input type="text" id="campoNomeForma" placeholder="Ex: Pix, Cartão de crédito, Dinheiro...">
+    </div>
+    <div class="form-grupo">
+      <label for="campoTaxaForma">Taxa cobrada (%)</label>
+      <input type="number" step="0.01" min="0" max="100" id="campoTaxaForma" value="0">
+    </div>
+  `;
+  modalOverlay.classList.add('aberto');
+});
+
+async function salvarNovaFormaPagamento(){
+  const nome = document.getElementById('campoNomeForma').value.trim();
+  const taxa = Number(document.getElementById('campoTaxaForma').value) || 0;
+
+  if (!nome){
+    mostrarToast('Informe o nome da forma de pagamento.', 'erro');
+    return;
+  }
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('formas_pagamento').insert({ nome, taxa_percentual: taxa });
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast('Não foi possível salvar.', 'erro');
+    return;
+  }
+
+  mostrarToast('Forma de pagamento criada!');
+  fecharModal();
+  carregarFormasPagamento();
+}
+
+// --------------------------------------------------------
 // DASHBOARD — visão geral estratégica: só o que pede decisão
 // --------------------------------------------------------
 function limitesDoMesAtual(offsetMeses = 0){
@@ -780,17 +879,20 @@ async function carregarDashboard(){
   const mesAnterior = limitesDoMesAtual(-1);
   const mesAtualStr = new Date().toISOString().slice(0, 7);
 
+  const seisMesesAtras = limitesDoMesAtual(-5);
+
   const [
-    respFinanceiroAtual,
+    respFinanceiroAtual, respFinanceiro6Meses,
     respVendasMesAtual, respVendasMesAnterior, respPedidosAbertoMes,
     respFichaCustos,
     respMetas,
     respInsumos, respComprasAbertas, respVendasAbertas, respProdutos,
     respProducoesMes,
   ] = await Promise.all([
-    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, origem').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome))').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
+    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, origem, categoria, data').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
+    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, data').gte('data', seisMesesAtras.primeiroDia).lte('data', mesAtual.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome, valor_frete)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(valor_frete)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
     supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id)').eq('status', 'aberto').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
     supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
     supabaseClient.from('metas').select('*').eq('mes_ano', mesAtualStr),
@@ -813,22 +915,27 @@ async function carregarDashboard(){
 
   // -------- agregações de um mês de vendas confirmadas --------
   function agregarVendas(pedidos){
-    let faturamento = 0, produtosVendidos = 0, custoTotal = 0;
+    let faturamento = 0, produtosVendidos = 0, custoTotal = 0, taxaMaquininha = 0, frete = 0;
     const vendidosPorProduto = {};
     pedidos.forEach(pedido => {
+      let valorPedido = 0;
       pedido.pedido_itens.forEach(item => {
         const valorItem = Number(item.quantidade) * Number(item.preco_unitario);
+        valorPedido += valorItem;
         faturamento += valorItem;
         produtosVendidos += Number(item.quantidade);
         custoTotal += Number(item.quantidade) * (custoUnitarioPorProduto[item.produto_id] || 0);
+        frete += Number(item.quantidade) * (item.produtos && item.produtos.valor_frete ? Number(item.produtos.valor_frete) : 0);
         if (item.produtos){
           vendidosPorProduto[item.produtos.nome] = (vendidosPorProduto[item.produtos.nome] || 0) + Number(item.quantidade);
         }
       });
+      const taxaPercentual = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
+      taxaMaquininha += valorPedido * (taxaPercentual / 100);
     });
     const quantidadePedidos = pedidos.length;
     const ticketMedio = quantidadePedidos > 0 ? faturamento / quantidadePedidos : 0;
-    return { faturamento, produtosVendidos, custoTotal, quantidadePedidos, ticketMedio, vendidosPorProduto };
+    return { faturamento, produtosVendidos, custoTotal, quantidadePedidos, ticketMedio, vendidosPorProduto, taxaMaquininha, frete };
   }
 
   const atual = agregarVendas(respVendasMesAtual.data || []);
@@ -840,7 +947,7 @@ async function carregarDashboard(){
 
   const margemBruta = atual.faturamento - atual.custoTotal;
   const margemPercentual = atual.faturamento > 0 ? (margemBruta / atual.faturamento) * 100 : 0;
-  const lucroLiquido = margemBruta - despesasManuais;
+  const lucroLiquido = margemBruta - despesasManuais - atual.taxaMaquininha - atual.frete;
 
   // -------- pontos de atenção (mesma lógica de antes) --------
   const insumosAbaixo = (respInsumos.data || []).filter(i => {
@@ -920,6 +1027,19 @@ async function carregarDashboard(){
   const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
   const percentualPrazo = (hoje.getDate() / diasNoMes) * 100;
 
+  // -------- série mensal (últimos 6 meses): faturamento (entradas) x despesas (saídas) --------
+  const mesesRotulo = [];
+  const faturamentoPorMes = [];
+  const despesasPorMes = [];
+  for (let i = 5; i >= 0; i--){
+    const ref = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const chave = ref.toISOString().slice(0, 7);
+    mesesRotulo.push(ref.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
+    const doMes = (respFinanceiro6Meses.data || []).filter(l => l.data.slice(0, 7) === chave);
+    faturamentoPorMes.push(doMes.filter(l => l.tipo === 'entrada').reduce((s, l) => s + Number(l.valor), 0));
+    despesasPorMes.push(doMes.filter(l => l.tipo === 'saida').reduce((s, l) => s + Number(l.valor), 0));
+  }
+
   const cardsMetas = (respMetas.data || []).map(meta => {
     const percentualValor = (atual.faturamento / Number(meta.valor_meta)) * 100;
     return `
@@ -971,58 +1091,6 @@ async function carregarDashboard(){
     </div>
     ${cardsMetas || '<div class="lista-vazia" style="grid-column:1/-1;">Nenhuma meta definida pra este mês — cadastre em Configurações.</div>'}
 
-    <div class="cartao-item" style="grid-column: span 2; min-width:280px;">
-      <div class="titulo-item"><span>Faturamento por dia — período atual x anterior</span></div>
-      <canvas id="graficoVendasPorDia" height="160"></canvas>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Situação dos pedidos do mês</span></div>
-      <div class="linha-info"><span>Confirmados (${atual.quantidadePedidos}/${totalPedidosMes})</span><span>${formatarMoeda(atual.faturamento)}</span></div>
-      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${pctConfirmado}%; background:var(--verde);"></div></div>
-      <div class="linha-info"><span>Em aberto (${pedidosAbertoMes.length}/${totalPedidosMes})</span><span>${formatarMoeda(totalValorAbertoMes)}</span></div>
-      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${pctAberto}%; background:var(--rosa);"></div></div>
-      <p style="font-size:0.72rem; color:var(--marrom-cafe); margin:6px 0 0;">Cancelamento ainda não é um status rastreado no sistema — avise se quiser que eu adicione.</p>
-    </div>
-
-    <div style="grid-column:1/-1;">
-      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Financeiro estratégico</h3>
-      <p style="font-size:0.78rem; color:var(--marrom-cafe); margin:-4px 0 12px;">Custo e margem são estimados a partir da ficha técnica — produtos sem ficha entram com custo zero.</p>
-    </div>
-    ${cardKpi('Custo de produção estimado', atual.custoTotal, anterior.custoTotal, formatarMoeda, false, '🧾')}
-    ${cardKpi('Margem bruta', margemBruta, anterior.faturamento - anterior.custoTotal, formatarMoeda, true, '📐')}
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Margem bruta (%)</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${margemPercentual.toFixed(1)}%</span></div>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Despesas manuais do mês</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarMoeda(despesasManuais)}</span></div>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Lucro líquido estimado</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</span></div>
-    </div>
-
-    <div style="grid-column:1/-1;">
-      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Pontos de atenção</h3>
-    </div>
-    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="estoque">
-      <div class="titulo-item"><span>Insumos abaixo do mínimo</span>${insumosAbaixo.length > 0 ? '<span class="badge-estoque-baixo">' + insumosAbaixo.length + '</span>' : ''}</div>
-      ${insumosAbaixo.length === 0 ? '<div class="linha-info"><span>Tudo certo por aqui.</span><span></span></div>' : listaNomes(insumosAbaixo, 'nome')}
-    </div>
-    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="compras">
-      <div class="titulo-item"><span>Compras aguardando recebimento</span>${comprasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + comprasAbertas.length + '</span>' : ''}</div>
-      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalComprasAbertas)}</span></div>
-    </div>
-    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="vendas">
-      <div class="titulo-item"><span>Vendas aguardando confirmação</span>${vendasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + vendasAbertas.length + '</span>' : ''}</div>
-      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalVendasAbertas)}</span></div>
-    </div>
-    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
-      <div class="titulo-item"><span>Produtos sem ficha técnica</span>${produtosSemFicha.length > 0 ? '<span class="badge-estoque-baixo">' + produtosSemFicha.length + '</span>' : ''}</div>
-      ${produtosSemFicha.length === 0 ? '<div class="linha-info"><span>Todos os produtos ativos têm ficha.</span><span></span></div>' : listaNomes(produtosSemFicha, 'nome')}
-    </div>
-
     <div style="grid-column:1/-1;">
       <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Relatório de produtos</h3>
     </div>
@@ -1050,6 +1118,66 @@ async function carregarDashboard(){
         ? '<div class="linha-info"><span>Nenhuma produção registrada este mês.</span><span></span></div>'
         : producaoPorProdutoLista.map(([nome, qtd]) => `<div class="linha-info"><span>${nome}</span><span>${formatarNum(qtd)} un.</span></div>`).join('')}
     </div>
+
+    <div class="cartao-item" style="grid-column: span 2; min-width:280px;">
+      <div class="titulo-item"><span>Faturamento por dia — período atual x anterior</span></div>
+      <canvas id="graficoVendasPorDia" height="160"></canvas>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Situação dos pedidos do mês</span></div>
+      <div class="linha-info"><span>Confirmados (${atual.quantidadePedidos}/${totalPedidosMes})</span><span>${formatarMoeda(atual.faturamento)}</span></div>
+      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${pctConfirmado}%; background:var(--verde);"></div></div>
+      <div class="linha-info"><span>Em aberto (${pedidosAbertoMes.length}/${totalPedidosMes})</span><span>${formatarMoeda(totalValorAbertoMes)}</span></div>
+      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${pctAberto}%; background:var(--rosa);"></div></div>
+      <p style="font-size:0.72rem; color:var(--marrom-cafe); margin:6px 0 0;">Cancelamento ainda não é um status rastreado no sistema — avise se quiser que eu adicione.</p>
+    </div>
+
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Financeiro estratégico</h3>
+      <p style="font-size:0.78rem; color:var(--marrom-cafe); margin:-4px 0 12px;">Custo e margem são estimados a partir da ficha técnica — produtos sem ficha entram com custo zero. Taxas de maquininha e frete são lançamentos manuais com essas categorias — já entram no total de despesas e no lucro abaixo.</p>
+    </div>
+    <div class="cartao-item" style="grid-column: span 2; min-width:280px;">
+      <div class="titulo-item"><span>Crescimento: faturamento x despesas (últimos 6 meses)</span></div>
+      <canvas id="graficoCrescimentoFinanceiro" height="160"></canvas>
+    </div>
+    ${cardKpi('Preço de custo (produção)', atual.custoTotal, anterior.custoTotal, formatarMoeda, false, '🧾')}
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Margem bruta</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarMoeda(margemBruta)}</span></div>
+      <div class="linha-info"><span>Margem bruta (%)</span><span>${margemPercentual.toFixed(1)}%</span></div>
+    </div>
+    ${cardKpi('Taxa de maquininha', atual.taxaMaquininha, anterior.taxaMaquininha, formatarMoeda, false, '💳')}
+    ${cardKpi('Frete pago', atual.frete, anterior.frete, formatarMoeda, false, '📦')}
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Despesas manuais do mês</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarMoeda(despesasManuais)}</span></div>
+      <p style="font-size:0.7rem; color:var(--marrom-cafe); margin:4px 0 0;">Aluguel, energia e outros lançamentos manuais — maquininha e frete já vêm calculados acima.</p>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Lucro líquido estimado</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</span></div>
+      <p style="font-size:0.7rem; color:var(--marrom-cafe); margin:4px 0 0;">Margem bruta − despesas manuais − maquininha − frete.</p>
+    </div>
+
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Pontos de atenção</h3>
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="estoque">
+      <div class="titulo-item"><span>Insumos abaixo do mínimo</span>${insumosAbaixo.length > 0 ? '<span class="badge-estoque-baixo">' + insumosAbaixo.length + '</span>' : ''}</div>
+      ${insumosAbaixo.length === 0 ? '<div class="linha-info"><span>Tudo certo por aqui.</span><span></span></div>' : listaNomes(insumosAbaixo, 'nome')}
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="compras">
+      <div class="titulo-item"><span>Compras aguardando recebimento</span>${comprasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + comprasAbertas.length + '</span>' : ''}</div>
+      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalComprasAbertas)}</span></div>
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="vendas">
+      <div class="titulo-item"><span>Vendas aguardando confirmação</span>${vendasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + vendasAbertas.length + '</span>' : ''}</div>
+      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalVendasAbertas)}</span></div>
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
+      <div class="titulo-item"><span>Produtos sem ficha técnica</span>${produtosSemFicha.length > 0 ? '<span class="badge-estoque-baixo">' + produtosSemFicha.length + '</span>' : ''}</div>
+      ${produtosSemFicha.length === 0 ? '<div class="linha-info"><span>Todos os produtos ativos têm ficha.</span><span></span></div>' : listaNomes(produtosSemFicha, 'nome')}
+    </div>
   `;
 
   container.querySelectorAll('[data-ir-aba]').forEach(cartao => {
@@ -1057,6 +1185,7 @@ async function carregarDashboard(){
   });
 
   desenharGraficoVendas(diasParaExibir, serieAtual, serieAnterior);
+  desenharGraficoCrescimento(mesesRotulo, faturamentoPorMes, despesasPorMes);
 }
 
 let graficoVendasInstancia = null;
@@ -1099,6 +1228,35 @@ function desenharGraficoVendas(dias, serieAtual, serieAnterior){
       plugins: { legend: { position: 'bottom', labels: { color: '#3A2A1C', font: { family: 'Poppins' } } } },
       scales: {
         x: { title: { display: true, text: 'Dia do mês' }, ticks: { color: '#8B5A2B' } },
+        y: { ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
+      },
+    },
+  });
+}
+
+let graficoCrescimentoInstancia = null;
+function desenharGraficoCrescimento(labels, faturamento, despesas){
+  const canvas = document.getElementById('graficoCrescimentoFinanceiro');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (graficoCrescimentoInstancia){
+    graficoCrescimentoInstancia.destroy();
+  }
+
+  graficoCrescimentoInstancia = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Faturamento', data: faturamento, backgroundColor: '#E0709A', borderRadius: 6 },
+        { label: 'Despesas', data: despesas, backgroundColor: '#8B5A2B', borderRadius: 6 },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { color: '#3A2A1C', font: { family: 'Poppins' } } } },
+      scales: {
+        x: { ticks: { color: '#8B5A2B' } },
         y: { ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
       },
     },
@@ -1178,16 +1336,16 @@ async function carregarFinanceiro(){
   }).join('');
 }
 
-document.getElementById('btnNovoLancamento').addEventListener('click', abrirModalNovoLancamento);
+document.getElementById('btnNovoLancamento').addEventListener('click', () => abrirModalNovoLancamento());
 
-function abrirModalNovoLancamento(){
+function abrirModalNovoLancamento(categoriaPreenchida){
   modoModal = { modo: 'lancamento' };
-  modalTitulo.textContent = 'Novo lançamento manual';
+  modalTitulo.textContent = categoriaPreenchida ? 'Novo lançamento — ' + categoriaPreenchida : 'Novo lançamento manual';
   modalCampos.innerHTML = `
     <div class="form-grupo">
       <label for="campoTipoLancamento">Tipo</label>
       <select id="campoTipoLancamento">
-        <option value="saida">Saída (conta a pagar)</option>
+        <option value="saida" selected>Saída (conta a pagar)</option>
         <option value="entrada">Entrada</option>
       </select>
     </div>
@@ -1201,7 +1359,7 @@ function abrirModalNovoLancamento(){
     </div>
     <div class="form-grupo">
       <label for="campoCategoriaLancamento">Categoria</label>
-      <input type="text" id="campoCategoriaLancamento" placeholder="Aluguel, energia, salário...">
+      <input type="text" id="campoCategoriaLancamento" placeholder="Aluguel, energia, salário..." value="${categoriaPreenchida || ''}">
     </div>
     <div class="form-grupo">
       <label for="campoObservacaoLancamento">Observação (opcional)</label>
@@ -1253,7 +1411,7 @@ async function carregarVendas(){
 
   const { data, error } = await supabaseClient
     .from('pedidos')
-    .select('*, clientes(nome), pedido_itens(quantidade, preco_unitario, produtos(nome))')
+    .select('*, clientes(nome), formas_pagamento(nome), pedido_itens(quantidade, preco_unitario, produtos(nome))')
     .order('criado_em', { ascending: false });
 
   if (error){
@@ -1288,6 +1446,7 @@ function renderizarVendas(pedidos){
           ${pedido.status === 'aberto' ? '<span class="badge-estoque-baixo">' + statusLabel + '</span>' : '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">' + statusLabel + '</span>'}
         </div>
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
+        ${pedido.formas_pagamento ? `<div class="linha-info"><span>Pagamento</span><span>${pedido.formas_pagamento.nome}</span></div>` : ''}
         ${linhasItens}
         <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
           <span>Total</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
@@ -1360,13 +1519,15 @@ function linhaItemVendaHtml(produtos){
 async function abrirModalNovaVenda(){
   modoModal = { modo: 'venda' };
 
-  const [respClientes, respProdutos] = await Promise.all([
+  const [respClientes, respProdutos, respFormasPagamento] = await Promise.all([
     supabaseClient.from('clientes').select('*').order('nome'),
     supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
+    supabaseClient.from('formas_pagamento').select('*').order('nome'),
   ]);
 
   const clientes = respClientes.data || [];
   const produtosAtivos = respProdutos.data || [];
+  const formasPagamento = respFormasPagamento.data || [];
 
   modalTitulo.textContent = 'Nova venda';
   modalCampos.innerHTML = `
@@ -1376,6 +1537,14 @@ async function abrirModalNovaVenda(){
         <option value="">Não informado</option>
         ${clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
       </select>
+    </div>
+    <div class="form-grupo">
+      <label for="campoFormaPagamentoVenda">Forma de pagamento</label>
+      <select id="campoFormaPagamentoVenda">
+        <option value="">Não informada</option>
+        ${formasPagamento.map(f => `<option value="${f.id}">${f.nome} (${Number(f.taxa_percentual).toLocaleString('pt-BR')}%)</option>`).join('')}
+      </select>
+      ${formasPagamento.length === 0 ? '<p style="font-size:0.72rem; color:var(--marrom-cafe); margin:4px 0 0;">Nenhuma cadastrada ainda — configure em Configurações pra a taxa de maquininha calcular sozinha.</p>' : ''}
     </div>
     <div class="form-grupo">
       <label for="campoDataVenda">Data</label>
@@ -1433,6 +1602,7 @@ async function abrirModalNovaVenda(){
 
 async function salvarNovaVenda(){
   const clienteId = document.getElementById('campoCliente').value || null;
+  const formaPagamentoId = document.getElementById('campoFormaPagamentoVenda').value || null;
   const dataVenda = document.getElementById('campoDataVenda').value;
 
   const itens = [];
@@ -1456,7 +1626,7 @@ async function salvarNovaVenda(){
 
   const { data: pedidoCriado, error: erroPedido } = await supabaseClient
     .from('pedidos')
-    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto' })
+    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto', forma_pagamento_id: formaPagamentoId })
     .select()
     .single();
 

@@ -500,6 +500,41 @@ h1, h2, h3, .fonte-titulo{
 .toast.erro{ background: var(--vermelho); color: #fff; }
 
 /* ---------------------------------------------------------
+   TABELA (histórico de movimentações por item)
+--------------------------------------------------------- */
+.tabela-container{
+  overflow-x: auto;
+  background: var(--branco);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra);
+}
+.tabela-movimentacoes{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 560px;
+}
+.tabela-movimentacoes th{
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--bege-claro);
+  color: var(--marrom-cafe);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.tabela-movimentacoes td{
+  padding: 10px 14px;
+  border-top: 1px solid var(--bege);
+  white-space: nowrap;
+}
+.tabela-movimentacoes tr:hover td{ background: var(--bege-claro); }
+.valor-entrada{ color: var(--verde); font-weight: 700; }
+.valor-saida{ color: var(--vermelho); font-weight: 700; }
+
+/* ---------------------------------------------------------
    BARRAS DE PROGRESSO (metas)
 --------------------------------------------------------- */
 .barra-progresso-legenda{

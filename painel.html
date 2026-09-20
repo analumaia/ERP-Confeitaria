@@ -53,6 +53,16 @@
 
     <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Últimas movimentações</h3>
     <div class="lista-cards" id="listaMovimentacoes"></div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Histórico completo por item</h3>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Busque um insumo ou produto pra ver todas as movimentações dele, uma por uma.</p>
+    <div class="barra-modulo">
+      <select id="filtroItemMovimentacoes" class="campo-busca" style="max-width:320px;">
+        <option value="">Selecione um insumo ou produto...</option>
+      </select>
+    </div>
+    <div id="resumoItemMovimentacoes"></div>
+    <div id="tabelaItemMovimentacoes"></div>
   </section>
 
   <!-- COMPRAS -->

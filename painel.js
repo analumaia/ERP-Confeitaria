@@ -487,7 +487,110 @@ async function carregarEstoque(){
   renderizarEstoqueItens(containerInsumos, respInsumos.data, 'insumo');
   renderizarEstoqueItens(containerProdutos, respProdutos.data, 'produto');
   renderizarMovimentacoes(containerMovs, respMovs.data);
+  popularFiltroItemMovimentacoes();
 }
+
+function popularFiltroItemMovimentacoes(){
+  const select = document.getElementById('filtroItemMovimentacoes');
+  const valorSelecionado = select.value;
+  select.innerHTML = `
+    <option value="">Selecione um insumo ou produto...</option>
+    <optgroup label="Insumos">
+      ${dadosEstoque.insumos.map(i => `<option value="insumo:${i.id}">${i.nome}${i.ativo === false ? ' (inativo)' : ''}</option>`).join('')}
+    </optgroup>
+    <optgroup label="Produtos">
+      ${dadosEstoque.produtos.map(p => `<option value="produto:${p.id}">${p.nome}${p.ativo === false ? ' (inativo)' : ''}</option>`).join('')}
+    </optgroup>
+  `;
+  select.value = valorSelecionado;
+}
+
+document.getElementById('filtroItemMovimentacoes').addEventListener('change', async (evento) => {
+  const valor = evento.target.value;
+  const resumo = document.getElementById('resumoItemMovimentacoes');
+  const tabela = document.getElementById('tabelaItemMovimentacoes');
+
+  if (!valor){
+    resumo.innerHTML = '';
+    tabela.innerHTML = '';
+    return;
+  }
+
+  const [tipoItem, itemId] = valor.split(':');
+  resumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  tabela.innerHTML = '';
+
+  const { data, error } = await supabaseClient
+    .from('movimentacoes_estoque')
+    .select('*')
+    .eq('tipo_item', tipoItem)
+    .eq('item_id', itemId)
+    .order('criado_em', { ascending: false })
+    .limit(300);
+
+  if (error){
+    resumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o histórico deste item.</div>';
+    return;
+  }
+
+  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
+  const item = lista.find(r => String(r.id) === String(itemId));
+  const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
+  const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
+  const saldoAtual = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
+  const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
+
+  const totalEntradas = data.filter(m => m.tipo_movimento === 'entrada').reduce((s, m) => s + Number(m.quantidade), 0);
+  const totalSaidas = data.filter(m => m.tipo_movimento === 'saida').reduce((s, m) => s + Number(m.quantidade), 0);
+
+  resumo.innerHTML = `
+    <div class="lista-cards" style="margin-bottom:14px;">
+      <div class="cartao-item">
+        <div class="titulo-item"><span>Saldo atual</span></div>
+        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${saldoAtual.toLocaleString('pt-BR')} ${unidade}</span></div>
+      </div>
+      <div class="cartao-item">
+        <div class="titulo-item"><span>Total de entradas</span></div>
+        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${totalEntradas.toLocaleString('pt-BR')} ${unidade}</span></div>
+      </div>
+      <div class="cartao-item">
+        <div class="titulo-item"><span>Total de saídas</span></div>
+        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-saida">${totalSaidas.toLocaleString('pt-BR')} ${unidade}</span></div>
+      </div>
+    </div>
+  `;
+
+  if (data.length === 0){
+    tabela.innerHTML = '<div class="lista-vazia">Nenhuma movimentação registrada pra este item ainda.</div>';
+    return;
+  }
+
+  tabela.innerHTML = `
+    <div class="tabela-container">
+      <table class="tabela-movimentacoes">
+        <thead>
+          <tr>
+            <th>Data</th><th>Entrada</th><th>Saída</th><th>Origem</th><th>Observação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(m => {
+            const dataFormatada = new Date(m.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+            return `
+              <tr>
+                <td>${dataFormatada}</td>
+                <td>${m.tipo_movimento === 'entrada' ? `<span class="valor-entrada">+${Number(m.quantidade).toLocaleString('pt-BR')}</span>` : '-'}</td>
+                <td>${m.tipo_movimento === 'saida' ? `<span class="valor-saida">−${Number(m.quantidade).toLocaleString('pt-BR')}</span>` : '-'}</td>
+                <td>${capitalizar(m.origem)}</td>
+                <td>${m.observacao || '-'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+});
 
 function renderizarEstoqueItens(container, itens, tipoItem){
   if (itens.length === 0){

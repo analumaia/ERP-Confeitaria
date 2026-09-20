@@ -70,10 +70,64 @@
 
   <!-- VENDAS -->
   <section class="conteudo-modulo" data-modulo="vendas">
-    <div class="barra-modulo">
-      <h2>Vendas</h2>
-      <button class="btn-novo" id="btnNovaVenda">+ Nova venda</button>
+    <div class="barra-modulo"><h2>Vendas</h2></div>
+
+    <div class="lista-cards" id="resumoVendas" style="margin-bottom:20px;"></div>
+
+    <div class="cartao-item" style="margin-bottom:24px;">
+      <div class="titulo-item"><span>Novo pedido</span></div>
+
+      <div class="form-linha-dupla" style="margin-top:10px;">
+        <div class="form-grupo">
+          <label for="campoClienteVenda">Cliente</label>
+          <select id="campoClienteVenda"><option value="">Sem cliente</option></select>
+        </div>
+        <div class="form-grupo">
+          <label for="campoFormaPagamentoVenda">Forma de pagamento</label>
+          <select id="campoFormaPagamentoVenda"><option value="">Não definida</option></select>
+        </div>
+      </div>
+      <div class="form-grupo">
+        <label for="campoDataVenda">Data</label>
+        <input type="date" id="campoDataVenda">
+      </div>
+
+      <div class="form-linha-dupla" style="align-items:end;">
+        <div class="form-grupo">
+          <label for="campoProdutoVenda">Produto</label>
+          <select id="campoProdutoVenda"><option value="">Escolha um produto</option></select>
+        </div>
+        <div class="form-grupo" style="display:flex; gap:8px;">
+          <div style="flex:1;">
+            <label for="campoQuantidadeVenda">Quantidade</label>
+            <input type="number" id="campoQuantidadeVenda" value="1" min="1" step="1">
+          </div>
+          <button type="button" class="btn-secundario" id="btnAdicionarItemVenda" style="flex:none; align-self:flex-end; padding:10px 16px;">Adicionar item</button>
+        </div>
+      </div>
+
+      <div id="itensVendaLista" style="margin:10px 0;"></div>
+
+      <div class="form-grupo">
+        <label for="campoObservacaoVenda">Observação</label>
+        <textarea id="campoObservacaoVenda" rows="2" placeholder="Recheio sem nozes, entrega às 15h..." style="width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--marrom-claro); font-family:inherit; font-size:0.92rem; resize:vertical;"></textarea>
+      </div>
+      <div class="form-grupo">
+        <label for="campoFreteVenda">Frete (R$)</label>
+        <input type="number" id="campoFreteVenda" value="0" min="0" step="0.01">
+      </div>
+
+      <div class="cartao-item" style="background:var(--bege-claro); box-shadow:none; margin-top:6px;">
+        <div class="linha-info"><span>Total do pedido</span><span id="totalPedidoVenda">R$ 0,00</span></div>
+        <div class="linha-info"><span>Taxa</span><span id="taxaPedidoVenda" class="valor-saida">− R$ 0,00</span></div>
+        <div class="linha-info"><span>Frete</span><span id="fretePedidoVenda" class="valor-saida">− R$ 0,00</span></div>
+        <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;"><span>Você recebe</span><span id="liquidoPedidoVenda">R$ 0,00</span></div>
+      </div>
+
+      <button type="button" class="btn-primario" id="btnRegistrarVenda" style="max-width:260px; margin-left:auto; display:block;">Registrar pedido</button>
     </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Pedidos registrados</h3>
     <div class="lista-cards" id="listaVendas"></div>
   </section>
 

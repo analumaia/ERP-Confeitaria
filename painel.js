@@ -42,13 +42,11 @@ const MODULOS = {
       { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Tradicionais, Cookie Pies...' },
       { chave: 'preco_venda', label: 'Preço de venda (R$)', tipo: 'number', passo: '0.01', obrigatorio: true },
       { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
-      { chave: 'valor_frete', label: 'Frete (por unidade vendida, R$)', tipo: 'number', passo: '0.01' },
     ],
     infoCampos: [
       { chave: 'categoria', label: 'Categoria' },
       { chave: 'preco_venda', label: 'Preço', formato: 'moeda' },
       { chave: 'estoque_minimo', label: 'Estoque mín.' },
-      { chave: 'valor_frete', label: 'Frete/un.', formato: 'moeda' },
     ],
   },
   fornecedores: {
@@ -379,11 +377,6 @@ modalForm.addEventListener('submit', async (evento) => {
 
   if (modoModal.modo === 'producao'){
     await salvarNovaProducao();
-    return;
-  }
-
-  if (modoModal.modo === 'venda'){
-    await salvarNovaVenda();
     return;
   }
 
@@ -961,8 +954,8 @@ async function carregarDashboard(){
   ] = await Promise.all([
     supabaseClient.from('lancamentos_financeiros').select('tipo, valor, origem, categoria, data').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
     supabaseClient.from('lancamentos_financeiros').select('tipo, valor, data').gte('data', seisMesesAtras.primeiroDia).lte('data', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome, valor_frete)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(valor_frete)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
     supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id)').eq('status', 'aberto').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
     supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
     supabaseClient.from('metas').select('*').eq('mes_ano', mesAtualStr),
@@ -995,13 +988,13 @@ async function carregarDashboard(){
         faturamento += valorItem;
         produtosVendidos += Number(item.quantidade);
         custoTotal += Number(item.quantidade) * (custoUnitarioPorProduto[item.produto_id] || 0);
-        frete += Number(item.quantidade) * (item.produtos && item.produtos.valor_frete ? Number(item.produtos.valor_frete) : 0);
         if (item.produtos){
           vendidosPorProduto[item.produtos.nome] = (vendidosPorProduto[item.produtos.nome] || 0) + Number(item.quantidade);
         }
       });
       const taxaPercentual = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
       taxaMaquininha += valorPedido * (taxaPercentual / 100);
+      frete += Number(pedido.valor_frete || 0);
     });
     const quantidadePedidos = pedidos.length;
     const ticketMedio = quantidadePedidos > 0 ? faturamento / quantidadePedidos : 0;
@@ -1475,36 +1468,82 @@ async function salvarNovoLancamento(){
 // --------------------------------------------------------
 // VENDAS / PEDIDOS
 // --------------------------------------------------------
+let itensVendaAtual = []; // [{ produto_id, nome, quantidade, preco_unitario }]
+let produtosParaVenda = [];
+let formasPagamentoParaVenda = [];
+
 async function carregarVendas(){
   const container = document.getElementById('listaVendas');
   container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
-  const { data, error } = await supabaseClient
-    .from('pedidos')
-    .select('*, clientes(nome), formas_pagamento(nome), pedido_itens(quantidade, preco_unitario, produtos(nome))')
-    .order('criado_em', { ascending: false });
+  const [respPedidos, respClientes, respProdutos, respFormas] = await Promise.all([
+    supabaseClient.from('pedidos').select('*, clientes(nome), formas_pagamento(nome, taxa_percentual), pedido_itens(quantidade, preco_unitario, produtos(nome))').order('criado_em', { ascending: false }),
+    supabaseClient.from('clientes').select('*').order('nome'),
+    supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
+    supabaseClient.from('formas_pagamento').select('*').order('nome'),
+  ]);
 
-  if (error){
+  if (respPedidos.error){
     container.innerHTML = '<div class="lista-vazia">Não foi possível carregar as vendas.</div>';
     mostrarToast('Erro ao carregar vendas.', 'erro');
     return;
   }
 
-  dadosCarregados.pedidos = data;
-  renderizarVendas(data);
+  dadosCarregados.pedidos = respPedidos.data;
+  produtosParaVenda = respProdutos.data || [];
+  formasPagamentoParaVenda = respFormas.data || [];
+
+  popularFormularioNovoPedido(respClientes.data || []);
+  renderizarResumoVendas(respPedidos.data);
+  renderizarVendas(respPedidos.data);
+}
+
+function renderizarResumoVendas(pedidos){
+  const confirmados = pedidos.filter(p => p.status === 'confirmado');
+  const abertos = pedidos.filter(p => p.status === 'aberto');
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  let faturamentoBruto = 0, taxasTotais = 0;
+  confirmados.forEach(p => {
+    const totalPedido = p.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
+    const taxaPct = p.formas_pagamento ? Number(p.formas_pagamento.taxa_percentual) : 0;
+    faturamentoBruto += totalPedido;
+    taxasTotais += totalPedido * (taxaPct / 100) + Number(p.valor_frete || 0);
+  });
+  const recebidoLiquido = faturamentoBruto - taxasTotais;
+
+  document.getElementById('resumoVendas').innerHTML = `
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Pedidos registrados</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${pedidos.length}</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Em aberto</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${abertos.length}</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Faturamento bruto</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarMoeda(faturamentoBruto)}</span></div>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Recebido líquido</span></div>
+      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${formatarMoeda(recebidoLiquido)}</span></div>
+      <div class="linha-info"><span>Taxas + frete</span><span>${formatarMoeda(taxasTotais)}</span></div>
+    </div>
+  `;
 }
 
 function renderizarVendas(pedidos){
   const container = document.getElementById('listaVendas');
   if (pedidos.length === 0){
-    container.innerHTML = '<div class="lista-vazia">Nenhuma venda registrada ainda.</div>';
+    container.innerHTML = '<div class="lista-vazia">Nenhum pedido registrado ainda.</div>';
     return;
   }
 
   container.innerHTML = pedidos.map(pedido => {
     const total = pedido.pedido_itens.reduce((soma, item) => soma + Number(item.quantidade) * Number(item.preco_unitario), 0);
     const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
-    const statusLabel = pedido.status === 'confirmado' ? 'Confirmada' : 'Em aberto';
+    const statusLabel = pedido.status === 'confirmado' ? 'Confirmado' : 'Em aberto';
     const linhasItens = pedido.pedido_itens.map(item => `
       <div class="linha-info"><span>${item.produtos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} × ${Number(item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
     `).join('');
@@ -1512,17 +1551,18 @@ function renderizarVendas(pedidos){
     return `
       <div class="cartao-item">
         <div class="titulo-item">
-          <span>${pedido.clientes ? pedido.clientes.nome : 'Cliente não informado'}</span>
+          <span>${pedido.clientes ? pedido.clientes.nome : 'Sem cliente'}</span>
           ${pedido.status === 'aberto' ? '<span class="badge-estoque-baixo">' + statusLabel + '</span>' : '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">' + statusLabel + '</span>'}
         </div>
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
         ${pedido.formas_pagamento ? `<div class="linha-info"><span>Pagamento</span><span>${pedido.formas_pagamento.nome}</span></div>` : ''}
         ${linhasItens}
+        ${Number(pedido.valor_frete) > 0 ? `<div class="linha-info"><span>Frete</span><span>${Number(pedido.valor_frete).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
         <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
           <span>Total</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
         </div>
         <div class="acoes-item">
-          ${pedido.status === 'aberto' ? `<button class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar venda</button>
+          ${pedido.status === 'aberto' ? `<button class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar pedido</button>
           <button class="btn-acao excluir" data-excluir-venda="${pedido.id}">Excluir</button>` : ''}
         </div>
       </div>
@@ -1538,192 +1578,160 @@ function renderizarVendas(pedidos){
 }
 
 async function confirmarVenda(id){
-  if (!window.confirm('Confirmar esta venda? Isso vai dar saída dos produtos no estoque automaticamente.')) return;
+  if (!window.confirm('Confirmar este pedido? Isso vai dar saída dos produtos no estoque automaticamente.')) return;
   const { error } = await supabaseClient.from('pedidos').update({ status: 'confirmado' }).eq('id', id);
   if (error){
-    mostrarToast(error.message || 'Não foi possível confirmar a venda.', 'erro');
+    mostrarToast(error.message || 'Não foi possível confirmar o pedido.', 'erro');
     return;
   }
-  mostrarToast('Venda confirmada — estoque atualizado!');
+  mostrarToast('Pedido confirmado — estoque atualizado!');
   carregarVendas();
 }
 
 async function excluirVenda(id){
-  if (!window.confirm('Excluir esta venda? Essa ação não pode ser desfeita.')) return;
+  if (!window.confirm('Excluir este pedido? Essa ação não pode ser desfeita.')) return;
   const { error } = await supabaseClient.from('pedidos').delete().eq('id', id);
   if (error){
-    mostrarToast('Não foi possível excluir a venda.', 'erro');
+    mostrarToast('Não foi possível excluir o pedido.', 'erro');
     return;
   }
-  mostrarToast('Venda excluída.');
+  mostrarToast('Pedido excluído.');
   carregarVendas();
 }
 
-// --------- Nova venda ---------
-document.getElementById('btnNovaVenda').addEventListener('click', abrirModalNovaVenda);
+// --------- Novo pedido (formulário inline, sem modal) ---------
+function popularFormularioNovoPedido(clientes){
+  document.getElementById('campoClienteVenda').innerHTML =
+    '<option value="">Sem cliente</option>' + clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
 
-function linhaItemVendaHtml(produtos){
-  const opcoes = produtos.map(p => `<option value="${p.id}" data-preco="${p.preco_venda}">${p.nome}</option>`).join('');
-  return `
-    <div class="form-linha-item-compra" style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end; margin-bottom:10px;">
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Produto</label>
-        <select class="venda-produto" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-          <option value="">Selecione...</option>
-          ${opcoes}
-        </select>
-      </div>
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Qtd.</label>
-        <input type="number" step="0.001" min="0.001" class="venda-quantidade" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-      </div>
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Preço unit.</label>
-        <input type="number" step="0.01" min="0" class="venda-preco" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-      </div>
-      <button type="button" class="btn-acao excluir remover-item-venda" style="padding:9px;">×</button>
-    </div>
-  `;
+  document.getElementById('campoFormaPagamentoVenda').innerHTML =
+    '<option value="">Não definida</option>' + formasPagamentoParaVenda.map(f => `<option value="${f.id}" data-taxa="${f.taxa_percentual}">${f.nome} (${Number(f.taxa_percentual).toLocaleString('pt-BR')}%)</option>`).join('');
+
+  document.getElementById('campoProdutoVenda').innerHTML =
+    '<option value="">Escolha um produto</option>' + produtosParaVenda.map(p => `<option value="${p.id}" data-preco="${p.preco_venda}">${p.nome}</option>`).join('');
+
+  if (!document.getElementById('campoDataVenda').value){
+    document.getElementById('campoDataVenda').value = new Date().toISOString().slice(0, 10);
+  }
 }
 
-async function abrirModalNovaVenda(){
-  modoModal = { modo: 'venda' };
-
-  const [respClientes, respProdutos, respFormasPagamento] = await Promise.all([
-    supabaseClient.from('clientes').select('*').order('nome'),
-    supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
-    supabaseClient.from('formas_pagamento').select('*').order('nome'),
-  ]);
-
-  const clientes = respClientes.data || [];
-  const produtosAtivos = respProdutos.data || [];
-  const formasPagamento = respFormasPagamento.data || [];
-
-  modalTitulo.textContent = 'Nova venda';
-  modalCampos.innerHTML = `
-    <div class="form-grupo">
-      <label for="campoCliente">Cliente (opcional)</label>
-      <select id="campoCliente">
-        <option value="">Não informado</option>
-        ${clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-grupo">
-      <label for="campoFormaPagamentoVenda">Forma de pagamento</label>
-      <select id="campoFormaPagamentoVenda">
-        <option value="">Não informada</option>
-        ${formasPagamento.map(f => `<option value="${f.id}">${f.nome} (${Number(f.taxa_percentual).toLocaleString('pt-BR')}%)</option>`).join('')}
-      </select>
-      ${formasPagamento.length === 0 ? '<p style="font-size:0.72rem; color:var(--marrom-cafe); margin:4px 0 0;">Nenhuma cadastrada ainda — configure em Configurações pra a taxa de maquininha calcular sozinha.</p>' : ''}
-    </div>
-    <div class="form-grupo">
-      <label for="campoDataVenda">Data</label>
-      <input type="date" id="campoDataVenda" value="${new Date().toISOString().slice(0, 10)}">
-    </div>
-    <div class="form-grupo">
-      <label>Itens</label>
-      <div id="itensVenda"></div>
-      <button type="button" class="btn-secundario" id="btnAdicionarItemVenda" style="margin-top:4px;">+ Adicionar item</button>
-    </div>
-    <div class="linha-info" style="font-weight:700; font-size:1rem; border-top:1px solid var(--bege); padding-top:8px;">
-      <span>Total</span><span id="totalVenda">R$ 0,00</span>
-    </div>
-  `;
-
-  const itensVenda = document.getElementById('itensVenda');
-
-  function adicionarLinhaItem(){
-    itensVenda.insertAdjacentHTML('beforeend', linhaItemVendaHtml(produtosAtivos));
-  }
-  adicionarLinhaItem();
-
-  document.getElementById('btnAdicionarItemVenda').addEventListener('click', adicionarLinhaItem);
-
-  function recalcularTotal(){
-    let total = 0;
-    itensVenda.querySelectorAll('.form-linha-item-compra').forEach(linha => {
-      const qtd = Number(linha.querySelector('.venda-quantidade').value) || 0;
-      const preco = Number(linha.querySelector('.venda-preco').value) || 0;
-      total += qtd * preco;
+function renderizarItensVendaAtual(){
+  const container = document.getElementById('itensVendaLista');
+  if (itensVendaAtual.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhum item no pedido ainda.</div>';
+  } else {
+    container.innerHTML = itensVendaAtual.map((item, indice) => `
+      <div class="linha-info">
+        <span>${item.nome} — ${item.quantidade} un.</span>
+        <span>${(item.quantidade * item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          <button type="button" class="btn-acao excluir" data-remover-item-atual="${indice}" style="padding:2px 8px; margin-left:8px;">×</button>
+        </span>
+      </div>
+    `).join('');
+    container.querySelectorAll('[data-remover-item-atual]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        itensVendaAtual.splice(Number(botao.dataset.removerItemAtual), 1);
+        renderizarItensVendaAtual();
+        recalcularTotaisVendaAtual();
+      });
     });
-    document.getElementById('totalVenda').textContent = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
-
-  // ao escolher um produto, pré-preenche o preço com o preço de tabela (editável depois)
-  itensVenda.addEventListener('change', (evento) => {
-    if (evento.target.classList.contains('venda-produto')){
-      const opcaoSelecionada = evento.target.selectedOptions[0];
-      const preco = opcaoSelecionada ? opcaoSelecionada.dataset.preco : '';
-      evento.target.closest('.form-linha-item-compra').querySelector('.venda-preco').value = preco || '';
-      recalcularTotal();
-    }
-  });
-
-  itensVenda.addEventListener('input', recalcularTotal);
-  itensVenda.addEventListener('click', (evento) => {
-    if (evento.target.classList.contains('remover-item-venda')){
-      evento.target.closest('.form-linha-item-compra').remove();
-      recalcularTotal();
-    }
-  });
-
-  modalOverlay.classList.add('aberto');
+  recalcularTotaisVendaAtual();
 }
 
-async function salvarNovaVenda(){
-  const clienteId = document.getElementById('campoCliente').value || null;
-  const formaPagamentoId = document.getElementById('campoFormaPagamentoVenda').value || null;
-  const dataVenda = document.getElementById('campoDataVenda').value;
+function recalcularTotaisVendaAtual(){
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const total = itensVendaAtual.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
+  const opcaoForma = document.getElementById('campoFormaPagamentoVenda').selectedOptions[0];
+  const taxaPct = opcaoForma ? Number(opcaoForma.dataset.taxa || 0) : 0;
+  const taxa = total * (taxaPct / 100);
+  const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
+  const liquido = total - taxa - frete;
 
-  const itens = [];
-  document.querySelectorAll('#itensVenda .form-linha-item-compra').forEach(linha => {
-    const produtoId = linha.querySelector('.venda-produto').value;
-    const quantidade = Number(linha.querySelector('.venda-quantidade').value);
-    const precoUnitario = Number(linha.querySelector('.venda-preco').value);
-    if (produtoId && quantidade > 0){
-      itens.push({ produto_id: produtoId, quantidade, preco_unitario: precoUnitario || 0 });
-    }
-  });
+  document.getElementById('totalPedidoVenda').textContent = formatarMoeda(total);
+  document.getElementById('taxaPedidoVenda').textContent = '− ' + formatarMoeda(taxa);
+  document.getElementById('fretePedidoVenda').textContent = '− ' + formatarMoeda(frete);
+  document.getElementById('liquidoPedidoVenda').textContent = formatarMoeda(liquido);
+}
 
-  if (itens.length === 0){
-    mostrarToast('Adicione pelo menos um item válido.', 'erro');
+document.getElementById('btnAdicionarItemVenda').addEventListener('click', () => {
+  const selectProduto = document.getElementById('campoProdutoVenda');
+  const opcao = selectProduto.selectedOptions[0];
+  const quantidade = Number(document.getElementById('campoQuantidadeVenda').value);
+
+  if (!selectProduto.value || !quantidade || quantidade <= 0){
+    mostrarToast('Escolha um produto e uma quantidade válida.', 'erro');
     return;
   }
 
-  const btnSalvar = document.getElementById('btnSalvarModal');
-  btnSalvar.disabled = true;
-  btnSalvar.textContent = 'Salvando...';
+  itensVendaAtual.push({
+    produto_id: selectProduto.value,
+    nome: opcao.textContent,
+    quantidade,
+    preco_unitario: Number(opcao.dataset.preco) || 0,
+  });
+
+  selectProduto.value = '';
+  document.getElementById('campoQuantidadeVenda').value = 1;
+  renderizarItensVendaAtual();
+});
+
+document.getElementById('campoFormaPagamentoVenda').addEventListener('change', recalcularTotaisVendaAtual);
+document.getElementById('campoFreteVenda').addEventListener('input', recalcularTotaisVendaAtual);
+
+document.getElementById('btnRegistrarVenda').addEventListener('click', async () => {
+  if (itensVendaAtual.length === 0){
+    mostrarToast('Adicione pelo menos um item ao pedido.', 'erro');
+    return;
+  }
+
+  const clienteId = document.getElementById('campoClienteVenda').value || null;
+  const formaPagamentoId = document.getElementById('campoFormaPagamentoVenda').value || null;
+  const dataVenda = document.getElementById('campoDataVenda').value;
+  const observacao = document.getElementById('campoObservacaoVenda').value.trim() || null;
+  const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
+
+  const btnRegistrar = document.getElementById('btnRegistrarVenda');
+  btnRegistrar.disabled = true;
+  btnRegistrar.textContent = 'Registrando...';
 
   const { data: pedidoCriado, error: erroPedido } = await supabaseClient
     .from('pedidos')
-    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto', forma_pagamento_id: formaPagamentoId })
+    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto', forma_pagamento_id: formaPagamentoId, observacao, valor_frete: frete })
     .select()
     .single();
 
   if (erroPedido){
-    btnSalvar.disabled = false;
-    btnSalvar.textContent = 'Salvar';
-    mostrarToast('Não foi possível criar a venda.', 'erro');
+    btnRegistrar.disabled = false;
+    btnRegistrar.textContent = 'Registrar pedido';
+    mostrarToast('Não foi possível criar o pedido.', 'erro');
     return;
   }
 
-  const itensComPedidoId = itens.map(item => ({ ...item, pedido_id: pedidoCriado.id }));
+  const itensComPedidoId = itensVendaAtual.map(item => ({
+    produto_id: item.produto_id, quantidade: item.quantidade, preco_unitario: item.preco_unitario, pedido_id: pedidoCriado.id,
+  }));
   const { error: erroItens } = await supabaseClient.from('pedido_itens').insert(itensComPedidoId);
 
-  btnSalvar.disabled = false;
-  btnSalvar.textContent = 'Salvar';
+  btnRegistrar.disabled = false;
+  btnRegistrar.textContent = 'Registrar pedido';
 
   if (erroItens){
-    mostrarToast('Venda criada, mas houve erro ao salvar os itens.', 'erro');
-    fecharModal();
+    mostrarToast('Pedido criado, mas houve erro ao salvar os itens.', 'erro');
     carregarVendas();
     return;
   }
 
-  mostrarToast('Venda registrada em aberto!');
-  fecharModal();
+  mostrarToast('Pedido registrado!');
+  itensVendaAtual = [];
+  document.getElementById('campoObservacaoVenda').value = '';
+  document.getElementById('campoFreteVenda').value = 0;
+  document.getElementById('campoClienteVenda').value = '';
+  document.getElementById('campoFormaPagamentoVenda').value = '';
+  renderizarItensVendaAtual();
   carregarVendas();
-}
+});
+
 
 // --------------------------------------------------------
 // PRODUÇÃO — ficha técnica + registro de produção

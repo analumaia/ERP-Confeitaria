@@ -22,11 +22,13 @@ const MODULOS = {
     temAtivo: true,
     campos: [
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Embalagens, matéria-prima, descartáveis...' },
       { chave: 'unidade_medida', label: 'Unidade de medida', tipo: 'text', obrigatorio: true, placeholder: 'kg, un, litro...' },
       { chave: 'custo_unitario', label: 'Custo unitário (R$)', tipo: 'number', passo: '0.01' },
       { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
     ],
     infoCampos: [
+      { chave: 'categoria', label: 'Categoria' },
       { chave: 'unidade_medida', label: 'Unidade' },
       { chave: 'custo_unitario', label: 'Custo unit.', formato: 'moeda' },
       { chave: 'estoque_minimo', label: 'Estoque mín.' },
@@ -220,7 +222,8 @@ function renderizarLista(chave){
   let registros = dadosCarregados[chave] || [];
   if (termoBusca){
     registros = registros.filter(r =>
-      String(r[config.tituloCampo] || '').toLowerCase().includes(termoBusca)
+      String(r[config.tituloCampo] || '').toLowerCase().includes(termoBusca) ||
+      String(r.categoria || '').toLowerCase().includes(termoBusca)
     );
   }
 
@@ -981,19 +984,22 @@ async function carregarDashboard(){
     let faturamento = 0, produtosVendidos = 0, custoTotal = 0, taxaMaquininha = 0, frete = 0;
     const vendidosPorProduto = {};
     pedidos.forEach(pedido => {
-      let valorPedido = 0;
+      let valorPedidoItens = 0;
       pedido.pedido_itens.forEach(item => {
         const valorItem = Number(item.quantidade) * Number(item.preco_unitario);
-        valorPedido += valorItem;
-        faturamento += valorItem;
+        valorPedidoItens += valorItem;
         produtosVendidos += Number(item.quantidade);
         custoTotal += Number(item.quantidade) * (custoUnitarioPorProduto[item.produto_id] || 0);
         if (item.produtos){
           vendidosPorProduto[item.produtos.nome] = (vendidosPorProduto[item.produtos.nome] || 0) + Number(item.quantidade);
         }
       });
+      // mesma fórmula usada pelo trigger confirmar_venda, pra bater com o financeiro real
+      const desconto = Math.min(valorPedidoItens, Number(pedido.desconto || 0));
+      const totalComDesconto = valorPedidoItens - desconto;
       const taxaPercentual = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
-      taxaMaquininha += valorPedido * (taxaPercentual / 100);
+      faturamento += totalComDesconto;
+      taxaMaquininha += totalComDesconto * (taxaPercentual / 100);
       frete += Number(pedido.valor_frete || 0);
     });
     const quantidadePedidos = pedidos.length;
@@ -1212,14 +1218,14 @@ async function carregarDashboard(){
     ${cardKpi('Taxa de maquininha', atual.taxaMaquininha, anterior.taxaMaquininha, formatarMoeda, false, '💳')}
     ${cardKpi('Frete pago', atual.frete, anterior.frete, formatarMoeda, false, '📦')}
     <div class="cartao-item">
-      <div class="titulo-item"><span>Despesas manuais do mês</span></div>
+      <div class="titulo-item"><span>Outras despesas do mês</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarMoeda(despesasManuais)}</span></div>
-      <p style="font-size:0.7rem; color:var(--marrom-cafe); margin:4px 0 0;">Aluguel, energia e outros lançamentos manuais — maquininha e frete já vêm calculados acima.</p>
+      <p style="font-size:0.7rem; color:var(--marrom-cafe); margin:4px 0 0;">Aluguel, energia, embalagem avulsa e qualquer outro custo — lance em Financeiro → "+ Lançamento manual". Maquininha e frete já vêm calculados acima.</p>
     </div>
     <div class="cartao-item">
       <div class="titulo-item"><span>Lucro líquido estimado</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</span></div>
-      <p style="font-size:0.7rem; color:var(--marrom-cafe); margin:4px 0 0;">Margem bruta − despesas manuais − maquininha − frete.</p>
+      <p style="font-size:0.7rem; color:var(--marrom-cafe); margin:4px 0 0;">Margem bruta − outras despesas − maquininha − frete. (Desconto dado ao cliente já reduz o faturamento acima.)</p>
     </div>
 
     <div style="grid-column:1/-1;">
@@ -1503,14 +1509,16 @@ function renderizarResumoVendas(pedidos){
   const abertos = pedidos.filter(p => p.status === 'aberto');
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  let faturamentoBruto = 0, taxasTotais = 0;
+  let faturamentoBruto = 0, deducoesTotais = 0;
   confirmados.forEach(p => {
     const totalPedido = p.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
+    const desconto = Math.min(totalPedido, Number(p.desconto || 0));
+    const totalComDesconto = totalPedido - desconto;
     const taxaPct = p.formas_pagamento ? Number(p.formas_pagamento.taxa_percentual) : 0;
     faturamentoBruto += totalPedido;
-    taxasTotais += totalPedido * (taxaPct / 100) + Number(p.valor_frete || 0);
+    deducoesTotais += desconto + totalComDesconto * (taxaPct / 100) + Number(p.valor_frete || 0);
   });
-  const recebidoLiquido = faturamentoBruto - taxasTotais;
+  const recebidoLiquido = faturamentoBruto - deducoesTotais;
 
   document.getElementById('resumoVendas').innerHTML = `
     <div class="cartao-item">
@@ -1528,7 +1536,7 @@ function renderizarResumoVendas(pedidos){
     <div class="cartao-item">
       <div class="titulo-item"><span>Recebido líquido</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${formatarMoeda(recebidoLiquido)}</span></div>
-      <div class="linha-info"><span>Taxas + frete</span><span>${formatarMoeda(taxasTotais)}</span></div>
+      <div class="linha-info"><span>Descontos + taxas + frete</span><span>${formatarMoeda(deducoesTotais)}</span></div>
     </div>
   `;
 }
@@ -1557,6 +1565,7 @@ function renderizarVendas(pedidos){
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
         ${pedido.formas_pagamento ? `<div class="linha-info"><span>Pagamento</span><span>${pedido.formas_pagamento.nome}</span></div>` : ''}
         ${linhasItens}
+        ${Number(pedido.desconto) > 0 ? `<div class="linha-info"><span>Desconto</span><span>− ${Number(pedido.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
         ${Number(pedido.valor_frete) > 0 ? `<div class="linha-info"><span>Frete</span><span>${Number(pedido.valor_frete).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
         <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
           <span>Total</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
@@ -1642,13 +1651,16 @@ function renderizarItensVendaAtual(){
 function recalcularTotaisVendaAtual(){
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const total = itensVendaAtual.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
+  const desconto = Math.min(total, Number(document.getElementById('campoDescontoVenda').value) || 0);
+  const totalComDesconto = total - desconto;
   const opcaoForma = document.getElementById('campoFormaPagamentoVenda').selectedOptions[0];
   const taxaPct = opcaoForma ? Number(opcaoForma.dataset.taxa || 0) : 0;
-  const taxa = total * (taxaPct / 100);
+  const taxa = totalComDesconto * (taxaPct / 100);
   const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
-  const liquido = total - taxa - frete;
+  const liquido = totalComDesconto - taxa - frete;
 
   document.getElementById('totalPedidoVenda').textContent = formatarMoeda(total);
+  document.getElementById('descontoPedidoVenda').textContent = '− ' + formatarMoeda(desconto);
   document.getElementById('taxaPedidoVenda').textContent = '− ' + formatarMoeda(taxa);
   document.getElementById('fretePedidoVenda').textContent = '− ' + formatarMoeda(frete);
   document.getElementById('liquidoPedidoVenda').textContent = formatarMoeda(liquido);
@@ -1677,6 +1689,7 @@ document.getElementById('btnAdicionarItemVenda').addEventListener('click', () =>
 });
 
 document.getElementById('campoFormaPagamentoVenda').addEventListener('change', recalcularTotaisVendaAtual);
+document.getElementById('campoDescontoVenda').addEventListener('input', recalcularTotaisVendaAtual);
 document.getElementById('campoFreteVenda').addEventListener('input', recalcularTotaisVendaAtual);
 
 document.getElementById('btnRegistrarVenda').addEventListener('click', async () => {
@@ -1689,6 +1702,7 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
   const formaPagamentoId = document.getElementById('campoFormaPagamentoVenda').value || null;
   const dataVenda = document.getElementById('campoDataVenda').value;
   const observacao = document.getElementById('campoObservacaoVenda').value.trim() || null;
+  const desconto = Number(document.getElementById('campoDescontoVenda').value) || 0;
   const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
 
   const btnRegistrar = document.getElementById('btnRegistrarVenda');
@@ -1697,7 +1711,7 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
 
   const { data: pedidoCriado, error: erroPedido } = await supabaseClient
     .from('pedidos')
-    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto', forma_pagamento_id: formaPagamentoId, observacao, valor_frete: frete })
+    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto', forma_pagamento_id: formaPagamentoId, observacao, valor_frete: frete, desconto })
     .select()
     .single();
 
@@ -1725,6 +1739,7 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
   mostrarToast('Pedido registrado!');
   itensVendaAtual = [];
   document.getElementById('campoObservacaoVenda').value = '';
+  document.getElementById('campoDescontoVenda').value = 0;
   document.getElementById('campoFreteVenda').value = 0;
   document.getElementById('campoClienteVenda').value = '';
   document.getElementById('campoFormaPagamentoVenda').value = '';

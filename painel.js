@@ -41,10 +41,12 @@ const MODULOS = {
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
       { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Tradicionais, Cookie Pies...' },
       { chave: 'preco_venda', label: 'Preço de venda (R$)', tipo: 'number', passo: '0.01', obrigatorio: true },
+      { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
     ],
     infoCampos: [
       { chave: 'categoria', label: 'Categoria' },
       { chave: 'preco_venda', label: 'Preço', formato: 'moeda' },
+      { chave: 'estoque_minimo', label: 'Estoque mín.' },
     ],
   },
   fornecedores: {
@@ -491,7 +493,7 @@ function renderizarEstoqueItens(container, itens, tipoItem){
     // como lista de 1 item, dependendo da versão/detecção da FK — tratamos os dois casos.
     const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
     const saldo = registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
-    const abaixoDoMinimo = tipoItem === 'insumo' && item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
+    const abaixoDoMinimo = item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
     const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
 
     const areaSaldo = modoBalanco
@@ -795,8 +797,8 @@ async function carregarDashboard(){
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').eq('ativo', true),
     supabaseClient.from('compras').select('*, compra_itens(quantidade, custo_unitario)').eq('status', 'pedido'),
     supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario)').eq('status', 'aberto'),
-    supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true),
-    supabaseClient.from('producoes').select('quantidade_produzida').gte('data_producao', mesAtual.primeiroDia).lte('data_producao', mesAtual.ultimoDia),
+    supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id), estoque_produtos(saldo_atual)').eq('ativo', true),
+    supabaseClient.from('producoes').select('quantidade_produzida, produtos(nome)').gte('data_producao', mesAtual.primeiroDia).lte('data_producao', mesAtual.ultimoDia),
   ]);
 
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -840,9 +842,6 @@ async function carregarDashboard(){
   const margemPercentual = atual.faturamento > 0 ? (margemBruta / atual.faturamento) * 100 : 0;
   const lucroLiquido = margemBruta - despesasManuais;
 
-  const rankingVendidos = Object.entries(atual.vendidosPorProduto).sort((a, b) => b[1] - a[1]);
-  const maisVendido = rankingVendidos[0];
-
   // -------- pontos de atenção (mesma lógica de antes) --------
   const insumosAbaixo = (respInsumos.data || []).filter(i => {
     const rel = i.estoque_insumos;
@@ -855,7 +854,34 @@ async function carregarDashboard(){
   const vendasAbertas = respVendasAbertas.data || [];
   const totalVendasAbertas = vendasAbertas.reduce((s, v) => s + v.pedido_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.preco_unitario), 0), 0);
   const produtosSemFicha = (respProdutos.data || []).filter(p => p.ficha_tecnica_itens.length === 0);
-  const totalProduzido = (respProducoesMes.data || []).reduce((s, p) => s + Number(p.quantidade_produzida), 0);
+  const produtosAbaixoMinimo = (respProdutos.data || []).filter(p => {
+    const rel = p.estoque_produtos;
+    const registro = Array.isArray(rel) ? rel[0] : rel;
+    const saldo = registro ? Number(registro.saldo_atual) : 0;
+    return p.estoque_minimo != null && saldo < Number(p.estoque_minimo);
+  });
+
+  // -------- top 10 produtos mais vendidos, com quantidade e valor --------
+  const rankingDetalhado = {};
+  (respVendasMesAtual.data || []).forEach(pedido => {
+    pedido.pedido_itens.forEach(item => {
+      if (!item.produtos) return;
+      const nome = item.produtos.nome;
+      if (!rankingDetalhado[nome]) rankingDetalhado[nome] = { quantidade: 0, valor: 0 };
+      rankingDetalhado[nome].quantidade += Number(item.quantidade);
+      rankingDetalhado[nome].valor += Number(item.quantidade) * Number(item.preco_unitario);
+    });
+  });
+  const top10Produtos = Object.entries(rankingDetalhado).sort((a, b) => b[1].quantidade - a[1].quantidade).slice(0, 10);
+
+  // -------- produção do mês, agrupada por produto --------
+  const producaoPorProduto = {};
+  (respProducoesMes.data || []).forEach(p => {
+    const nome = p.produtos ? p.produtos.nome : '(produto removido)';
+    producaoPorProduto[nome] = (producaoPorProduto[nome] || 0) + Number(p.quantidade_produzida);
+  });
+  const producaoPorProdutoLista = Object.entries(producaoPorProduto).sort((a, b) => b[1] - a[1]);
+  const totalProduzido = producaoPorProdutoLista.reduce((s, [, qtd]) => s + qtd, 0);
 
   // -------- helpers de render --------
   function cardKpi(titulo, valorAtual, valorAnterior, formatarFn, aumentoBom = true, icone = '📈'){
@@ -996,15 +1022,33 @@ async function carregarDashboard(){
       <div class="titulo-item"><span>Produtos sem ficha técnica</span>${produtosSemFicha.length > 0 ? '<span class="badge-estoque-baixo">' + produtosSemFicha.length + '</span>' : ''}</div>
       ${produtosSemFicha.length === 0 ? '<div class="linha-info"><span>Todos os produtos ativos têm ficha.</span><span></span></div>' : listaNomes(produtosSemFicha, 'nome')}
     </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Produto mais vendido no mês</span></div>
-      ${maisVendido
-        ? `<div class="linha-info"><span>${maisVendido[0]}</span><span>${formatarNum(maisVendido[1])} un.</span></div>`
-        : '<div class="linha-info"><span>Nenhuma venda confirmada este mês ainda.</span><span></span></div>'}
+
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Relatório de produtos</h3>
+    </div>
+    <div class="cartao-item" style="grid-column: span 2; min-width:280px;">
+      <div class="titulo-item"><span>Top 10 produtos mais vendidos no mês</span></div>
+      ${top10Produtos.length === 0
+        ? '<div class="linha-info"><span>Nenhuma venda confirmada este mês ainda.</span><span></span></div>'
+        : top10Produtos.map(([nome, dados], i) => `<div class="linha-info"><span>${i + 1}. ${nome}</span><span>${formatarNum(dados.quantidade)} un. — ${formatarMoeda(dados.valor)}</span></div>`).join('')}
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="produtos">
+      <div class="titulo-item"><span>Produtos abaixo do mínimo</span>${produtosAbaixoMinimo.length > 0 ? '<span class="badge-estoque-baixo">' + produtosAbaixoMinimo.length + '</span>' : ''}</div>
+      ${produtosAbaixoMinimo.length === 0 ? '<div class="linha-info"><span>Tudo certo por aqui.</span><span></span></div>' : listaNomes(produtosAbaixoMinimo, 'nome')}
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="estoque">
+      <div class="titulo-item"><span>Insumos abaixo do mínimo</span>${insumosAbaixo.length > 0 ? '<span class="badge-estoque-baixo">' + insumosAbaixo.length + '</span>' : ''}</div>
+      ${insumosAbaixo.length === 0 ? '<div class="linha-info"><span>Tudo certo por aqui.</span><span></span></div>' : listaNomes(insumosAbaixo, 'nome')}
+    </div>
+    <div class="cartao-item" style="cursor:pointer;" data-ir-aba="compras">
+      <div class="titulo-item"><span>Compras aguardando recebimento</span>${comprasAbertas.length > 0 ? '<span class="badge-estoque-baixo">' + comprasAbertas.length + '</span>' : ''}</div>
+      <div class="linha-info"><span>Valor pendente</span><span>${formatarMoeda(totalComprasAbertas)}</span></div>
     </div>
     <div class="cartao-item" style="cursor:pointer;" data-ir-aba="producao">
-      <div class="titulo-item"><span>Produção do mês</span></div>
-      <div class="linha-info"><span>Total produzido</span><span>${formatarNum(totalProduzido)} un.</span></div>
+      <div class="titulo-item"><span>Produção do mês</span><span>${formatarNum(totalProduzido)} un.</span></div>
+      ${producaoPorProdutoLista.length === 0
+        ? '<div class="linha-info"><span>Nenhuma produção registrada este mês.</span><span></span></div>'
+        : producaoPorProdutoLista.map(([nome, qtd]) => `<div class="linha-info"><span>${nome}</span><span>${formatarNum(qtd)} un.</span></div>`).join('')}
     </div>
   `;
 

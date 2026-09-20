@@ -780,7 +780,7 @@ async function carregarDashboard(){
 
   const [
     respFinanceiroAtual,
-    respVendasMesAtual, respVendasMesAnterior,
+    respVendasMesAtual, respVendasMesAnterior, respPedidosAbertoMes,
     respFichaCustos,
     respMetas,
     respInsumos, respComprasAbertas, respVendasAbertas, respProdutos,
@@ -789,6 +789,7 @@ async function carregarDashboard(){
     supabaseClient.from('lancamentos_financeiros').select('tipo, valor, origem').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
     supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome))').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
     supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id)').eq('status', 'aberto').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
     supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
     supabaseClient.from('metas').select('*').eq('mes_ano', mesAtualStr),
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').eq('ativo', true),
@@ -857,16 +858,23 @@ async function carregarDashboard(){
   const totalProduzido = (respProducoesMes.data || []).reduce((s, p) => s + Number(p.quantidade_produzida), 0);
 
   // -------- helpers de render --------
-  function cardKpi(titulo, valorAtual, valorAnterior, formatarFn, aumentoBom = true){
+  function cardKpi(titulo, valorAtual, valorAnterior, formatarFn, aumentoBom = true, icone = '📈'){
     const variacao = valorAnterior !== 0 ? ((valorAtual - valorAnterior) / Math.abs(valorAnterior)) * 100 : (valorAtual !== 0 ? 100 : 0);
     const positivo = variacao >= 0;
     const corBoa = positivo === aumentoBom;
     const cor = variacao === 0 ? 'var(--marrom-cafe)' : (corBoa ? 'var(--verde)' : 'var(--vermelho)');
     const seta = variacao === 0 ? '' : (positivo ? '▲ ' : '▼ ');
+    const percentualBarra = valorAnterior > 0 ? Math.min(100, (valorAtual / valorAnterior) * 100) : (valorAtual > 0 ? 100 : 0);
     return `
       <div class="cartao-item">
-        <div class="titulo-item"><span>${titulo}</span></div>
-        <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${formatarFn(valorAtual)}</span></div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:36px; height:36px; border-radius:50%; background:var(--bege-claro); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0;">${icone}</div>
+          <div>
+            <div style="font-size:1.3rem; font-weight:700; line-height:1.1;">${formatarFn(valorAtual)}</div>
+            <div style="font-size:0.78rem; color:var(--marrom-cafe);">${titulo}</div>
+          </div>
+        </div>
+        <div class="barra-progresso-container" style="margin-top:10px;"><div class="barra-progresso-fill" style="width:${percentualBarra}%; background:${cor};"></div></div>
         <div class="linha-info"><span style="color:${cor}; font-weight:700;">${seta}${Math.abs(variacao).toFixed(0)}%</span><span>Mês ant.: ${formatarFn(valorAnterior)}</span></div>
       </div>
     `;
@@ -897,6 +905,29 @@ async function carregarDashboard(){
     `;
   }).join('');
 
+  // -------- série diária: faturamento por dia, mês atual x mês anterior --------
+  function valorPorDia(pedidos){
+    const mapa = {};
+    pedidos.forEach(pedido => {
+      const dia = Number(pedido.data_pedido.slice(8, 10));
+      const valorPedido = pedido.pedido_itens.reduce((s, item) => s + Number(item.quantidade) * Number(item.preco_unitario), 0);
+      mapa[dia] = (mapa[dia] || 0) + valorPedido;
+    });
+    return mapa;
+  }
+  const porDiaAtual = valorPorDia(respVendasMesAtual.data || []);
+  const porDiaAnterior = valorPorDia(respVendasMesAnterior.data || []);
+  const diasParaExibir = Array.from({ length: diasNoMes }, (_, i) => i + 1);
+  const serieAtual = diasParaExibir.map(d => porDiaAtual[d] || 0);
+  const serieAnterior = diasParaExibir.map(d => porDiaAnterior[d] || 0);
+
+  // -------- situação dos pedidos criados no mês (confirmados x em aberto) --------
+  const pedidosAbertoMes = respPedidosAbertoMes.data || [];
+  const totalValorAbertoMes = pedidosAbertoMes.reduce((s, p) => s + p.pedido_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.preco_unitario), 0), 0);
+  const totalPedidosMes = atual.quantidadePedidos + pedidosAbertoMes.length;
+  const pctConfirmado = totalPedidosMes > 0 ? (atual.quantidadePedidos / totalPedidosMes) * 100 : 0;
+  const pctAberto = totalPedidosMes > 0 ? (pedidosAbertoMes.length / totalPedidosMes) * 100 : 0;
+
   const listaNomes = (itens, chaveNome) => itens.slice(0, 5).map(i => `<div class="linha-info"><span>${i[chaveNome]}</span><span></span></div>`).join('')
     + (itens.length > 5 ? `<div class="linha-info"><span>e mais ${itens.length - 5}...</span><span></span></div>` : '');
 
@@ -904,17 +935,35 @@ async function carregarDashboard(){
     <div style="grid-column:1/-1;">
       <h3 class="fonte-titulo" style="font-size:1.1rem; margin:4px 0 10px;">Desempenho do mês</h3>
     </div>
-    ${cardKpi('Faturamento', atual.faturamento, anterior.faturamento, formatarMoeda)}
-    ${cardKpi('Quantidade de pedidos', atual.quantidadePedidos, anterior.quantidadePedidos, formatarNum)}
-    ${cardKpi('Produtos vendidos', atual.produtosVendidos, anterior.produtosVendidos, formatarNum)}
-    ${cardKpi('Ticket médio', atual.ticketMedio, anterior.ticketMedio, formatarMoeda)}
+    ${cardKpi('Faturamento', atual.faturamento, anterior.faturamento, formatarMoeda, true, '💵')}
+    ${cardKpi('Quantidade de pedidos', atual.quantidadePedidos, anterior.quantidadePedidos, formatarNum, true, '🛍️')}
+    ${cardKpi('Produtos vendidos', atual.produtosVendidos, anterior.produtosVendidos, formatarNum, true, '📦')}
+    ${cardKpi('Ticket médio', atual.ticketMedio, anterior.ticketMedio, formatarMoeda, true, '🎟️')}
+
+    <div style="grid-column:1/-1;">
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Metas em andamento</h3>
+    </div>
+    ${cardsMetas || '<div class="lista-vazia" style="grid-column:1/-1;">Nenhuma meta definida pra este mês — cadastre em Configurações.</div>'}
+
+    <div class="cartao-item" style="grid-column: span 2; min-width:280px;">
+      <div class="titulo-item"><span>Faturamento por dia — período atual x anterior</span></div>
+      <canvas id="graficoVendasPorDia" height="160"></canvas>
+    </div>
+    <div class="cartao-item">
+      <div class="titulo-item"><span>Situação dos pedidos do mês</span></div>
+      <div class="linha-info"><span>Confirmados (${atual.quantidadePedidos}/${totalPedidosMes})</span><span>${formatarMoeda(atual.faturamento)}</span></div>
+      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${pctConfirmado}%; background:var(--verde);"></div></div>
+      <div class="linha-info"><span>Em aberto (${pedidosAbertoMes.length}/${totalPedidosMes})</span><span>${formatarMoeda(totalValorAbertoMes)}</span></div>
+      <div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${pctAberto}%; background:var(--rosa);"></div></div>
+      <p style="font-size:0.72rem; color:var(--marrom-cafe); margin:6px 0 0;">Cancelamento ainda não é um status rastreado no sistema — avise se quiser que eu adicione.</p>
+    </div>
 
     <div style="grid-column:1/-1;">
       <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Financeiro estratégico</h3>
       <p style="font-size:0.78rem; color:var(--marrom-cafe); margin:-4px 0 12px;">Custo e margem são estimados a partir da ficha técnica — produtos sem ficha entram com custo zero.</p>
     </div>
-    ${cardKpi('Custo de produção estimado', atual.custoTotal, anterior.custoTotal, formatarMoeda, false)}
-    ${cardKpi('Margem bruta', margemBruta, anterior.faturamento - anterior.custoTotal, formatarMoeda)}
+    ${cardKpi('Custo de produção estimado', atual.custoTotal, anterior.custoTotal, formatarMoeda, false, '🧾')}
+    ${cardKpi('Margem bruta', margemBruta, anterior.faturamento - anterior.custoTotal, formatarMoeda, true, '📐')}
     <div class="cartao-item">
       <div class="titulo-item"><span>Margem bruta (%)</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${margemPercentual.toFixed(1)}%</span></div>
@@ -927,11 +976,6 @@ async function carregarDashboard(){
       <div class="titulo-item"><span>Lucro líquido estimado</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</span></div>
     </div>
-
-    <div style="grid-column:1/-1;">
-      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Metas em andamento</h3>
-    </div>
-    ${cardsMetas || '<div class="lista-vazia" style="grid-column:1/-1;">Nenhuma meta definida pra este mês — cadastre em Configurações.</div>'}
 
     <div style="grid-column:1/-1;">
       <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Pontos de atenção</h3>
@@ -966,6 +1010,54 @@ async function carregarDashboard(){
 
   container.querySelectorAll('[data-ir-aba]').forEach(cartao => {
     cartao.addEventListener('click', () => trocarAba(cartao.dataset.irAba));
+  });
+
+  desenharGraficoVendas(diasParaExibir, serieAtual, serieAnterior);
+}
+
+let graficoVendasInstancia = null;
+function desenharGraficoVendas(dias, serieAtual, serieAnterior){
+  const canvas = document.getElementById('graficoVendasPorDia');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (graficoVendasInstancia){
+    graficoVendasInstancia.destroy();
+  }
+
+  graficoVendasInstancia = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dias,
+      datasets: [
+        {
+          label: 'Período atual',
+          data: serieAtual,
+          borderColor: '#E0709A',
+          backgroundColor: 'rgba(224, 112, 154, 0.15)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 2,
+        },
+        {
+          label: 'Período anterior',
+          data: serieAnterior,
+          borderColor: '#C9946B',
+          backgroundColor: 'rgba(201, 148, 107, 0.08)',
+          borderDash: [5, 4],
+          fill: true,
+          tension: 0.35,
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { color: '#3A2A1C', font: { family: 'Poppins' } } } },
+      scales: {
+        x: { title: { display: true, text: 'Dia do mês' }, ticks: { color: '#8B5A2B' } },
+        y: { ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
+      },
+    },
   });
 }
 

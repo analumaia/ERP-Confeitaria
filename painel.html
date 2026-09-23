@@ -11,18 +11,25 @@
 <body>
 
 <header class="cabecalho">
-  <div class="container">
-    <div class="cabecalho-interno">
+  <div class="cabecalho-interno">
+    <div class="cabecalho-esq">
+      <button class="btn-menu" id="btnMenu" aria-label="Abrir menu" aria-controls="menuLateral" aria-expanded="false">☰</button>
       <div class="logo-caixa"><img src="logo.png" alt="Bakeria Confeitaria Artesanal"></div>
-      <img class="mascote-cabecalho" src="mascote-cabecalho.png" alt="">
-      <button class="btn-sair" id="btnSair">Sair</button>
     </div>
+    <img class="mascote-cabecalho" src="mascote-cabecalho.png" alt="">
+    <button class="btn-sair" id="btnSair">Sair</button>
   </div>
 </header>
 
-<div class="container">
+<div class="menu-fundo" id="menuFundo"></div>
 
-  <nav class="abas-modulos" id="abasModulos"></nav>
+<div class="layout-painel">
+
+  <aside class="menu-lateral" id="menuLateral">
+    <nav class="abas-modulos" id="abasModulos" aria-label="Menu principal"></nav>
+  </aside>
+
+  <main class="area-principal">
 
   <!-- DASHBOARD -->
   <section class="conteudo-modulo" data-modulo="dashboard">
@@ -61,11 +68,14 @@
       <button class="btn-novo" id="btnNovaProducao">+ Nova produção</button>
     </div>
 
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Fichas técnicas</h3>
-    <div class="lista-cards" id="listaFichasTecnicas"></div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Histórico de produções</h3>
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Histórico de produções</h3>
     <div class="lista-cards" id="listaProducoes"></div>
+  </section>
+
+  <!-- FICHAS TÉCNICAS -->
+  <section class="conteudo-modulo" data-modulo="fichas">
+    <div class="barra-modulo"><h2>Fichas técnicas</h2></div>
+    <div class="lista-cards" id="listaFichasTecnicas"></div>
   </section>
 
   <!-- VENDAS -->
@@ -209,6 +219,7 @@
     <div class="lista-cards" id="listaFormasPagamento"></div>
   </section>
 
+  </main>
 </div>
 
 <!-- MODAL genérico de criar/editar, preenchido dinamicamente pelo JS -->

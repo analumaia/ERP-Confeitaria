@@ -33,8 +33,14 @@
 
   <!-- DASHBOARD -->
   <section class="conteudo-modulo" data-modulo="dashboard">
-    <div class="barra-modulo"><h2>Visão geral</h2></div>
-    <div class="lista-cards" id="listaDashboard"></div>
+    <div class="barra-modulo">
+      <h2>Visão geral do negócio</h2>
+      <div class="filtro-periodo">
+        <label for="filtroMesDashboard">Período:</label>
+        <input type="month" id="filtroMesDashboard">
+      </div>
+    </div>
+    <div class="dashboard" id="listaDashboard"></div>
   </section>
 
   <!-- ESTOQUE -->

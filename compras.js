@@ -21,6 +21,23 @@ const campoPeriodoComprasDe = document.getElementById('periodoComprasDe');
 const campoPeriodoComprasAte = document.getElementById('periodoComprasAte');
 
 const moedaCompra = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// custos unitários (R$/g, R$/un) precisam de mais casas que o dinheiro comum
+const moedaUnitaria = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 6 });
+
+// Como o frete é dividido entre os itens: 'quantidade' (igual por unidade comprada)
+// ou 'valor' (proporcional ao valor de cada item). Deve ser igual a v_metodo no SQL.
+const METODO_RATEIO_FRETE = 'quantidade';
+
+// itens: [{ quantidade, custo_unitario }] -> frete por unidade de cada item
+function freteUnitarioDosItens(itens, frete){
+  if (!(frete > 0)) return itens.map(() => 0);
+  const quantidade = itens.reduce((s, i) => s + Number(i.quantidade), 0);
+  const valor = itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.custo_unitario), 0);
+  if (METODO_RATEIO_FRETE === 'valor' && valor > 0){
+    return itens.map(i => frete * Number(i.custo_unitario) / valor);
+  }
+  return itens.map(() => (quantidade > 0 ? frete / quantidade : 0));
+}
 
 // --------------------------------------------------------
 // Dados: compras (relatório) + fornecedores e insumos (formulário)
@@ -66,7 +83,7 @@ function adicionarLinhaItemCompra(){
     <div class="compra-linha-item">
       <select class="item-insumo" aria-label="Insumo">${opcoesInsumoHtml()}</select>
       <input type="number" class="item-quantidade" step="0.001" min="0.001" placeholder="Qtda" aria-label="Quantidade">
-      <input type="number" class="item-custo" step="0.01" min="0" placeholder="Cust. un." aria-label="Custo unitário">
+      <input type="number" class="item-custo" step="0.0001" min="0" placeholder="Cust. un." aria-label="Custo unitário">
       <button type="button" class="remover-item-compra" aria-label="Remover item">×</button>
     </div>
   `);
@@ -88,11 +105,25 @@ function atualizarOpcoesFormularioCompra(){
 }
 
 function recalcularTotalCompra(){
-  let total = Number(campoFreteCompra.value) || 0;
+  const frete = Number(campoFreteCompra.value) || 0;
+  let total = frete;
+  let quantidadeTotal = 0;
   itensCompra.querySelectorAll('.compra-linha-item').forEach(linha => {
-    total += (Number(linha.querySelector('.item-quantidade').value) || 0) * (Number(linha.querySelector('.item-custo').value) || 0);
+    const quantidade = Number(linha.querySelector('.item-quantidade').value) || 0;
+    quantidadeTotal += quantidade;
+    total += quantidade * (Number(linha.querySelector('.item-custo').value) || 0);
   });
   document.getElementById('totalCompra').textContent = moedaCompra(total);
+
+  // rateio do frete por quantidade: cada unidade comprada assume a mesma fatia do frete
+  const elRateio = document.getElementById('rateioFreteCompra');
+  if (frete > 0 && quantidadeTotal > 0){
+    elRateio.textContent = METODO_RATEIO_FRETE === 'valor'
+      ? 'Frete rateado proporcionalmente ao valor de cada item'
+      : `Rateio por quantidade: ${moedaUnitaria(frete / quantidadeTotal)} de frete por unidade comprada (${quantidadeTotal.toLocaleString('pt-BR')} no total)`;
+  } else {
+    elRateio.textContent = '';
+  }
 }
 
 function resetarFormularioCompra(){
@@ -261,8 +292,10 @@ function renderizarRelatorioCompras(){
     const frete = Number(compra.valor_frete || 0);
     const dataFormatada = new Date(compra.data_compra + 'T00:00:00').toLocaleDateString('pt-BR');
     const recebida = compra.status === 'recebido';
-    const linhasItens = compra.compra_itens.map(item => `
-      <div class="linha-info"><span>${item.insumos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${item.insumos.unidade_medida} × ${moedaCompra(Number(item.custo_unitario))}</span></div>
+    const fretesUnitarios = freteUnitarioDosItens(compra.compra_itens, frete);
+    const linhasItens = compra.compra_itens.map((item, i) => `
+      <div class="linha-info"><span>${item.insumos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${item.insumos.unidade_medida} × ${moedaUnitaria(Number(item.custo_unitario))}</span></div>
+      ${frete > 0 && Number(item.custo_unitario) > 0 ? `<div class="item-sub">custo com frete rateado: ${moedaUnitaria(Number(item.custo_unitario) + fretesUnitarios[i])} por ${item.insumos.unidade_medida}</div>` : ''}
     `).join('');
 
     return `

@@ -15,7 +15,7 @@ const MODULOS = {
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
       { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Embalagens, matéria-prima, descartáveis...' },
       { chave: 'unidade_medida', label: 'Unidade de medida', tipo: 'text', obrigatorio: true, placeholder: 'kg, un, litro...' },
-      { chave: 'custo_unitario', label: 'Custo unitário (R$)', tipo: 'number', passo: '0.01' },
+      { chave: 'custo_unitario', label: 'Custo unitário (R$)', tipo: 'number', passo: '0.0001' },
       { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
     ],
     infoCampos: [
@@ -89,7 +89,7 @@ function formatarValor(registro, infoCampo){
   const valor = registro[infoCampo.chave];
   if (valor === null || valor === undefined || valor === '') return '—';
   if (infoCampo.formato === 'moeda'){
-    return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 6 });
   }
   return valor + (infoCampo.sufixo || '');
 }

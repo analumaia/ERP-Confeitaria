@@ -18,11 +18,6 @@ modalForm.addEventListener('submit', async (evento) => {
     return;
   }
 
-  if (modoModal.modo === 'compra'){
-    await salvarNovaCompra();
-    return;
-  }
-
   if (modoModal.modo === 'ficha_tecnica'){
     await salvarFichaTecnica();
     return;

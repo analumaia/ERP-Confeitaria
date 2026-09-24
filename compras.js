@@ -1,58 +1,286 @@
 /* ============================================================
-   COMPRAS — pedido de compra pro fornecedor, com itens de insumo.
-   Ao marcar como recebida, o trigger no banco credita o estoque
-   e atualiza o custo do insumo automaticamente.
+   COMPRAS — à esquerda, o formulário fixo "Nova compra" (sem modal);
+   à direita, o relatório das compras com filtro de período.
+   Ao marcar uma compra como recebida, o trigger no banco credita o
+   estoque e atualiza o custo do insumo automaticamente.
+
+   Frete: usa a coluna compras.valor_frete (ver SQL de migração).
+   Depende de dataLocalISO (estoque.js, carregado antes deste).
    ============================================================ */
 
+let fornecedoresCompra = [];
+let insumosAtivosCompra = [];
+
+const formNovaCompra = document.getElementById('formNovaCompra');
+const campoFornecedorCompra = document.getElementById('campoFornecedorCompra');
+const campoDataCompra = document.getElementById('campoDataCompra');
+const itensCompra = document.getElementById('itensCompra');
+const campoFreteCompra = document.getElementById('campoFreteCompra');
+const btnSalvarCompra = document.getElementById('btnSalvarCompra');
+const campoPeriodoComprasDe = document.getElementById('periodoComprasDe');
+const campoPeriodoComprasAte = document.getElementById('periodoComprasAte');
+
+const moedaCompra = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// --------------------------------------------------------
+// Dados: compras (relatório) + fornecedores e insumos (formulário)
+// --------------------------------------------------------
 async function carregarCompras(){
-  const container = document.getElementById('listaCompras');
-  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  const lista = document.getElementById('listaCompras');
+  if (!dadosCarregados.compras) lista.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
-  const { data, error } = await supabaseClient
-    .from('compras')
-    .select('*, fornecedores(nome), compra_itens(quantidade, custo_unitario, insumos(nome, unidade_medida))')
-    .order('criado_em', { ascending: false });
+  const [respCompras, respFornecedores, respInsumos] = await Promise.all([
+    supabaseClient
+      .from('compras')
+      .select('*, fornecedores(nome), compra_itens(quantidade, custo_unitario, insumos(nome, unidade_medida))')
+      .order('data_compra', { ascending: false })
+      .order('criado_em', { ascending: false }),
+    supabaseClient.from('fornecedores').select('*').order('nome'),
+    supabaseClient.from('insumos').select('*').eq('ativo', true).order('nome'),
+  ]);
 
-  if (error){
-    container.innerHTML = '<div class="lista-vazia">Não foi possível carregar as compras.</div>';
+  if (respCompras.error){
+    lista.innerHTML = '<div class="lista-vazia">Não foi possível carregar as compras.</div>';
     mostrarToast('Erro ao carregar compras.', 'erro');
     return;
   }
 
-  dadosCarregados.compras = data;
-  renderizarCompras(data);
+  fornecedoresCompra = respFornecedores.data || [];
+  insumosAtivosCompra = respInsumos.data || [];
+  dadosCarregados.compras = respCompras.data;
+
+  atualizarOpcoesFormularioCompra();
+  renderizarRelatorioCompras();
 }
 
-function renderizarCompras(compras){
+// --------------------------------------------------------
+// Formulário "Nova compra"
+// --------------------------------------------------------
+function opcoesInsumoHtml(){
+  return '<option value="">Selecione o insumo...</option>' +
+    insumosAtivosCompra.map(i => `<option value="${i.id}">${i.nome} (${i.unidade_medida})</option>`).join('');
+}
+
+function adicionarLinhaItemCompra(){
+  itensCompra.insertAdjacentHTML('beforeend', `
+    <div class="compra-linha-item">
+      <select class="item-insumo" aria-label="Insumo">${opcoesInsumoHtml()}</select>
+      <input type="number" class="item-quantidade" step="0.001" min="0.001" placeholder="Qtda" aria-label="Quantidade">
+      <input type="number" class="item-custo" step="0.01" min="0" placeholder="Cust. un." aria-label="Custo unitário">
+      <button type="button" class="remover-item-compra" aria-label="Remover item">×</button>
+    </div>
+  `);
+}
+
+// atualiza as listas sem apagar o que a pessoa já escolheu/digitou
+function atualizarOpcoesFormularioCompra(){
+  const fornecedorEscolhido = campoFornecedorCompra.value;
+  campoFornecedorCompra.innerHTML = '<option value="">Selecione o fornecedor...</option>' +
+    fornecedoresCompra.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+  campoFornecedorCompra.value = fornecedorEscolhido;
+
+  const opcoes = opcoesInsumoHtml();
+  itensCompra.querySelectorAll('.item-insumo').forEach(select => {
+    const escolhido = select.value;
+    select.innerHTML = opcoes;
+    select.value = escolhido;
+  });
+}
+
+function recalcularTotalCompra(){
+  let total = Number(campoFreteCompra.value) || 0;
+  itensCompra.querySelectorAll('.compra-linha-item').forEach(linha => {
+    total += (Number(linha.querySelector('.item-quantidade').value) || 0) * (Number(linha.querySelector('.item-custo').value) || 0);
+  });
+  document.getElementById('totalCompra').textContent = moedaCompra(total);
+}
+
+function resetarFormularioCompra(){
+  campoFornecedorCompra.value = '';
+  campoDataCompra.value = dataLocalISO(new Date());
+  campoFreteCompra.value = 0;
+  itensCompra.innerHTML = '';
+  adicionarLinhaItemCompra();
+  recalcularTotalCompra();
+}
+
+// Lê as linhas: ignora as totalmente vazias e avisa sobre as pela metade
+function lerItensCompra(){
+  const itens = [];
+  let incompleto = false;
+  itensCompra.querySelectorAll('.compra-linha-item').forEach(linha => {
+    const insumoId = linha.querySelector('.item-insumo').value;
+    const quantidade = Number(linha.querySelector('.item-quantidade').value);
+    const custoUnitario = Number(linha.querySelector('.item-custo').value);
+    if (!insumoId && !(quantidade > 0) && !(custoUnitario > 0)) return;
+    if (!insumoId || !(quantidade > 0)){
+      incompleto = true;
+      return;
+    }
+    itens.push({ insumo_id: insumoId, quantidade, custo_unitario: custoUnitario || 0 });
+  });
+  return { itens, incompleto };
+}
+
+document.getElementById('btnAdicionarItemCompra').addEventListener('click', adicionarLinhaItemCompra);
+itensCompra.addEventListener('input', recalcularTotalCompra);
+itensCompra.addEventListener('click', (evento) => {
+  if (evento.target.classList.contains('remover-item-compra')){
+    evento.target.closest('.compra-linha-item').remove();
+    if (itensCompra.children.length === 0) adicionarLinhaItemCompra();
+    recalcularTotalCompra();
+  }
+});
+campoFreteCompra.addEventListener('input', recalcularTotalCompra);
+document.getElementById('btnCancelarCompra').addEventListener('click', resetarFormularioCompra);
+formNovaCompra.addEventListener('submit', (evento) => {
+  evento.preventDefault();
+  salvarNovaCompra();
+});
+
+async function salvarNovaCompra(){
+  const dataCompra = campoDataCompra.value;
+  const frete = Number(campoFreteCompra.value) || 0;
+  const { itens, incompleto } = lerItensCompra();
+
+  if (!dataCompra){
+    mostrarToast('Informe a data da compra.', 'erro');
+    return;
+  }
+  if (frete < 0){
+    mostrarToast('O frete não pode ser negativo.', 'erro');
+    return;
+  }
+  if (incompleto){
+    mostrarToast('Complete insumo e quantidade de todos os itens, ou remova a linha.', 'erro');
+    return;
+  }
+  if (itens.length === 0){
+    mostrarToast('Adicione pelo menos um item válido.', 'erro');
+    return;
+  }
+
+  btnSalvarCompra.disabled = true;
+  btnSalvarCompra.textContent = 'Salvando...';
+
+  const novaCompra = { fornecedor_id: campoFornecedorCompra.value || null, data_compra: dataCompra, status: 'pedido' };
+  if (frete > 0) novaCompra.valor_frete = frete; // só envia quando há frete
+
+  const { data: compraCriada, error: erroCompra } = await supabaseClient.from('compras').insert(novaCompra).select().single();
+
+  if (erroCompra){
+    btnSalvarCompra.disabled = false;
+    btnSalvarCompra.textContent = 'Salvar';
+    const semColunaFrete = String(erroCompra.message || '').includes('valor_frete');
+    mostrarToast(semColunaFrete ? 'O campo de frete ainda não existe no banco — rode o SQL de migração.' : 'Não foi possível criar a compra.', 'erro');
+    return;
+  }
+
+  const { error: erroItens } = await supabaseClient
+    .from('compra_itens')
+    .insert(itens.map(item => ({ ...item, compra_id: compraCriada.id })));
+
+  btnSalvarCompra.disabled = false;
+  btnSalvarCompra.textContent = 'Salvar';
+
+  if (erroItens){
+    // desfaz a compra vazia pra não sobrar pedido sem itens; o formulário fica como está pra tentar de novo
+    await supabaseClient.from('compras').delete().eq('id', compraCriada.id);
+    mostrarToast('Não foi possível salvar os itens. Nada foi registrado — tente novamente.', 'erro');
+    return;
+  }
+
+  mostrarToast('Compra registrada como pedido em aberto!');
+  resetarFormularioCompra();
+  carregarCompras();
+}
+
+// --------------------------------------------------------
+// Relatório (direita): filtro de período + resumo + lista
+// --------------------------------------------------------
+function definirPeriodoCompras(tipo){
+  const hoje = new Date();
+  let de = '', ate = '';
+  if (tipo === 'mes'){
+    de = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    ate = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+  } else if (tipo === 'anterior'){
+    de = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+    ate = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 0));
+  }
+  campoPeriodoComprasDe.value = de;
+  campoPeriodoComprasAte.value = ate;
+  renderizarRelatorioCompras();
+}
+
+function aoMudarPeriodoCompras(){
+  if (campoPeriodoComprasDe.value && campoPeriodoComprasAte.value && campoPeriodoComprasDe.value > campoPeriodoComprasAte.value){
+    mostrarToast('A data inicial não pode ser depois da data final.', 'erro');
+    return;
+  }
+  renderizarRelatorioCompras();
+}
+
+campoPeriodoComprasDe.addEventListener('change', aoMudarPeriodoCompras);
+campoPeriodoComprasAte.addEventListener('change', aoMudarPeriodoCompras);
+// delegado: também vale pro botão "ver tudo" que aparece dentro do relatório
+document.querySelector('[data-modulo="compras"]').addEventListener('click', (evento) => {
+  const botao = evento.target.closest('[data-periodo-compras]');
+  if (botao) definirPeriodoCompras(botao.dataset.periodoCompras);
+});
+
+function totalDaCompra(compra){
+  return compra.compra_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.custo_unitario), 0) + Number(compra.valor_frete || 0);
+}
+
+function renderizarRelatorioCompras(){
+  const todas = dadosCarregados.compras || [];
+  const de = campoPeriodoComprasDe.value;
+  const ate = campoPeriodoComprasAte.value;
+  const noPeriodo = c => (!de || c.data_compra >= de) && (!ate || c.data_compra <= ate);
+
+  const compras = todas.filter(noPeriodo);
+  const emAberto = compras.filter(c => c.status === 'pedido').length;
+  const abertasForaDoPeriodo = todas.filter(c => c.status === 'pedido' && !noPeriodo(c)).length;
+  const valorTotal = compras.reduce((s, c) => s + totalDaCompra(c), 0);
+
+  document.getElementById('resumoCompras').innerHTML = `
+    <div class="mini-kpi"><div class="kpi-titulo">Compras</div><div class="mini-kpi-valor">${compras.length}</div></div>
+    <div class="mini-kpi"><div class="kpi-titulo">Valor total</div><div class="mini-kpi-valor">${moedaCompra(valorTotal)}</div></div>
+    <div class="mini-kpi"><div class="kpi-titulo">Em aberto</div><div class="mini-kpi-valor">${emAberto}</div></div>
+    ${abertasForaDoPeriodo > 0 ? `<button type="button" class="aviso-aberto" data-periodo-compras="tudo">⚠️ ${abertasForaDoPeriodo} pedido(s) em aberto fora deste período — ver tudo</button>` : ''}
+  `;
+
   const container = document.getElementById('listaCompras');
   if (compras.length === 0){
-    container.innerHTML = '<div class="lista-vazia">Nenhuma compra registrada ainda.</div>';
+    container.innerHTML = '<div class="lista-vazia">Nenhuma compra neste período.</div>';
     return;
   }
 
   container.innerHTML = compras.map(compra => {
-    const total = compra.compra_itens.reduce((soma, item) => soma + Number(item.quantidade) * Number(item.custo_unitario), 0);
+    const frete = Number(compra.valor_frete || 0);
     const dataFormatada = new Date(compra.data_compra + 'T00:00:00').toLocaleDateString('pt-BR');
-    const statusLabel = compra.status === 'recebido' ? 'Recebida' : 'Pedido em aberto';
+    const recebida = compra.status === 'recebido';
     const linhasItens = compra.compra_itens.map(item => `
-      <div class="linha-info"><span>${item.insumos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${item.insumos.unidade_medida} × ${Number(item.custo_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+      <div class="linha-info"><span>${item.insumos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${item.insumos.unidade_medida} × ${moedaCompra(Number(item.custo_unitario))}</span></div>
     `).join('');
 
     return `
-      <div class="cartao-item">
+      <div class="compra-item">
         <div class="titulo-item">
           <span>${compra.fornecedores ? compra.fornecedores.nome : 'Fornecedor não informado'}</span>
-          ${compra.status === 'pedido' ? '<span class="badge-estoque-baixo">' + statusLabel + '</span>' : '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">' + statusLabel + '</span>'}
+          ${recebida ? '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">Recebida</span>' : '<span class="badge-estoque-baixo">Pedido em aberto</span>'}
         </div>
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
         ${linhasItens}
+        ${frete > 0 ? `<div class="linha-info"><span>Frete</span><span>${moedaCompra(frete)}</span></div>` : ''}
         <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
-          <span>Total</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          <span>Total</span><span>${moedaCompra(totalDaCompra(compra))}</span>
         </div>
-        <div class="acoes-item">
-          ${compra.status === 'pedido' ? `<button class="btn-acao" data-receber="${compra.id}">Marcar como recebida</button>
-          <button class="btn-acao excluir" data-excluir-compra="${compra.id}">Excluir</button>` : ''}
-        </div>
+        ${recebida ? '' : `<div class="acoes-item">
+          <button class="btn-acao" data-receber="${compra.id}">Marcar como recebida</button>
+          <button class="btn-acao excluir" data-excluir-compra="${compra.id}">Excluir</button>
+        </div>`}
       </div>
     `;
   }).join('');
@@ -88,148 +316,7 @@ async function excluirCompra(id){
 }
 
 // --------------------------------------------------------
-// Modal de Nova Compra (fornecedor + data + itens dinâmicos)
+// Estado inicial
 // --------------------------------------------------------
-document.getElementById('btnNovaCompra').addEventListener('click', abrirModalNovaCompra);
-
-function linhaItemCompraHtml(insumos){
-  const opcoes = insumos.map(i => `<option value="${i.id}">${i.nome} (${i.unidade_medida})</option>`).join('');
-  return `
-    <div class="form-linha-item-compra" style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end; margin-bottom:10px;">
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Insumo</label>
-        <select class="item-insumo" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-          <option value="">Selecione...</option>
-          ${opcoes}
-        </select>
-      </div>
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Qtd.</label>
-        <input type="number" step="0.001" min="0.001" class="item-quantidade" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-      </div>
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Custo unit.</label>
-        <input type="number" step="0.01" min="0" class="item-custo" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-      </div>
-      <button type="button" class="btn-acao excluir remover-item-compra" style="padding:9px;">×</button>
-    </div>
-  `;
-}
-
-async function abrirModalNovaCompra(){
-  modoModal = { modo: 'compra' };
-
-  const [respFornecedores, respInsumos] = await Promise.all([
-    supabaseClient.from('fornecedores').select('*').order('nome'),
-    supabaseClient.from('insumos').select('*').eq('ativo', true).order('nome'),
-  ]);
-
-  const fornecedores = respFornecedores.data || [];
-  const insumosAtivos = respInsumos.data || [];
-
-  modalTitulo.textContent = 'Nova compra';
-  modalCampos.innerHTML = `
-    <div class="form-grupo">
-      <label for="campoFornecedor">Fornecedor</label>
-      <select id="campoFornecedor">
-        <option value="">Selecione...</option>
-        ${fornecedores.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-grupo">
-      <label for="campoDataCompra">Data da compra</label>
-      <input type="date" id="campoDataCompra" value="${new Date().toISOString().slice(0, 10)}">
-    </div>
-    <div class="form-grupo">
-      <label>Itens</label>
-      <div id="itensCompra"></div>
-      <button type="button" class="btn-secundario" id="btnAdicionarItemCompra" style="margin-top:4px;">+ Adicionar item</button>
-    </div>
-    <div class="linha-info" style="font-weight:700; font-size:1rem; border-top:1px solid var(--bege); padding-top:8px;">
-      <span>Total</span><span id="totalCompra">R$ 0,00</span>
-    </div>
-  `;
-
-  const itensCompra = document.getElementById('itensCompra');
-
-  function adicionarLinhaItem(){
-    itensCompra.insertAdjacentHTML('beforeend', linhaItemCompraHtml(insumosAtivos));
-  }
-  adicionarLinhaItem(); // começa com uma linha
-
-  document.getElementById('btnAdicionarItemCompra').addEventListener('click', adicionarLinhaItem);
-
-  function recalcularTotal(){
-    let total = 0;
-    itensCompra.querySelectorAll('.form-linha-item-compra').forEach(linha => {
-      const qtd = Number(linha.querySelector('.item-quantidade').value) || 0;
-      const custo = Number(linha.querySelector('.item-custo').value) || 0;
-      total += qtd * custo;
-    });
-    document.getElementById('totalCompra').textContent = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  itensCompra.addEventListener('input', recalcularTotal);
-  itensCompra.addEventListener('click', (evento) => {
-    if (evento.target.classList.contains('remover-item-compra')){
-      evento.target.closest('.form-linha-item-compra').remove();
-      recalcularTotal();
-    }
-  });
-
-  modalOverlay.classList.add('aberto');
-}
-
-async function salvarNovaCompra(){
-  const fornecedorId = document.getElementById('campoFornecedor').value || null;
-  const dataCompra = document.getElementById('campoDataCompra').value;
-
-  const itens = [];
-  document.querySelectorAll('#itensCompra .form-linha-item-compra').forEach(linha => {
-    const insumoId = linha.querySelector('.item-insumo').value;
-    const quantidade = Number(linha.querySelector('.item-quantidade').value);
-    const custoUnitario = Number(linha.querySelector('.item-custo').value);
-    if (insumoId && quantidade > 0){
-      itens.push({ insumo_id: insumoId, quantidade, custo_unitario: custoUnitario || 0 });
-    }
-  });
-
-  if (itens.length === 0){
-    mostrarToast('Adicione pelo menos um item válido.', 'erro');
-    return;
-  }
-
-  const btnSalvar = document.getElementById('btnSalvarModal');
-  btnSalvar.disabled = true;
-  btnSalvar.textContent = 'Salvando...';
-
-  const { data: compraCriada, error: erroCompra } = await supabaseClient
-    .from('compras')
-    .insert({ fornecedor_id: fornecedorId, data_compra: dataCompra, status: 'pedido' })
-    .select()
-    .single();
-
-  if (erroCompra){
-    btnSalvar.disabled = false;
-    btnSalvar.textContent = 'Salvar';
-    mostrarToast('Não foi possível criar a compra.', 'erro');
-    return;
-  }
-
-  const itensComCompraId = itens.map(item => ({ ...item, compra_id: compraCriada.id }));
-  const { error: erroItens } = await supabaseClient.from('compra_itens').insert(itensComCompraId);
-
-  btnSalvar.disabled = false;
-  btnSalvar.textContent = 'Salvar';
-
-  if (erroItens){
-    mostrarToast('Compra criada, mas houve erro ao salvar os itens.', 'erro');
-    fecharModal();
-    carregarCompras();
-    return;
-  }
-
-  mostrarToast('Compra registrada como pedido em aberto!');
-  fecharModal();
-  carregarCompras();
-}
+resetarFormularioCompra();
+definirPeriodoCompras('mes');

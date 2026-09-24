@@ -102,11 +102,63 @@
 
   <!-- COMPRAS -->
   <section class="conteudo-modulo" data-modulo="compras">
-    <div class="barra-modulo">
-      <h2>Compras</h2>
-      <button class="btn-novo" id="btnNovaCompra">+ Nova compra</button>
+    <div class="barra-modulo"><h2>Compras</h2></div>
+
+    <div class="compras-layout">
+
+      <!-- Nova compra (formulário fixo) -->
+      <form class="cartao-item cartao-nova-compra" id="formNovaCompra" novalidate>
+        <div class="compra-corpo">
+          <h3 class="compra-titulo">Nova compra</h3>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoFornecedorCompra">Fornecedor</label>
+              <select id="campoFornecedorCompra"><option value="">Selecione o fornecedor...</option></select>
+            </div>
+            <div class="form-grupo">
+              <label for="campoDataCompra">Data</label>
+              <input type="date" id="campoDataCompra">
+            </div>
+          </div>
+
+          <div class="compra-secao-titulo">Itens</div>
+          <div id="itensCompra"></div>
+          <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemCompra">+ Adicionar insumo</button>
+        </div>
+
+        <div class="compra-rodape-frete">
+          <div class="compra-frete-linha">
+            <label for="campoFreteCompra">Frete</label>
+            <input type="number" id="campoFreteCompra" min="0" step="0.01" value="0" placeholder="Valor">
+          </div>
+          <div class="compra-total-linha"><span>Total da compra</span><span id="totalCompra">R$ 0,00</span></div>
+        </div>
+
+        <div class="compra-acoes">
+          <button type="button" class="compra-btn-cancelar" id="btnCancelarCompra">Cancelar</button>
+          <button type="submit" class="compra-btn-salvar" id="btnSalvarCompra">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Relatório -->
+      <div class="cartao-item cartao-relatorio-compras">
+        <div class="filtro-periodo filtro-periodo-largo" style="margin-bottom:0;">
+          <label for="periodoComprasDe">Período:</label>
+          <input type="date" id="periodoComprasDe" aria-label="Data inicial">
+          <span>até</span>
+          <input type="date" id="periodoComprasAte" aria-label="Data final">
+          <div class="chips-periodo">
+            <button type="button" class="chip-periodo" data-periodo-compras="mes">Este mês</button>
+            <button type="button" class="chip-periodo" data-periodo-compras="anterior">Mês anterior</button>
+            <button type="button" class="chip-periodo" data-periodo-compras="tudo">Tudo</button>
+          </div>
+        </div>
+        <div class="compras-resumo" id="resumoCompras"></div>
+        <div class="compras-lista" id="listaCompras"></div>
+      </div>
+
     </div>
-    <div class="lista-cards" id="listaCompras"></div>
   </section>
 
   <!-- PRODUÇÃO -->

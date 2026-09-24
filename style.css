@@ -929,6 +929,174 @@ h1, h2, h3, .fonte-titulo{
 }
 
 /* ---------------------------------------------------------
+   COMPRAS (formulário fixo à esquerda + relatório à direita)
+--------------------------------------------------------- */
+.compras-layout{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.cartao-nova-compra{
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  min-height: 640px;
+}
+.compra-corpo{
+  flex: 1;
+  padding: 22px 24px;
+}
+.compra-titulo{ font-size: 1.2rem; margin: 0 0 14px; }
+.compra-secao-titulo{ font-weight: 700; font-size: 0.95rem; margin: 6px 0 10px; }
+
+.cartao-nova-compra .form-grupo input,
+.cartao-nova-compra .form-grupo select{
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+
+.compra-linha-item{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 104px 40px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.compra-linha-item select,
+.compra-linha-item input{
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--marrom-claro);
+  background: var(--branco);
+  color: var(--marrom-escuro);
+  font-size: 0.88rem;
+}
+.compra-linha-item select:focus,
+.compra-linha-item input:focus{ border-color: var(--rosa); }
+
+.remover-item-compra{
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--vermelho-bg);
+  color: var(--vermelho);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.remover-item-compra:hover{ background: #f6cfcf; }
+
+.btn-add-item{
+  flex: none;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  background: var(--bege);
+  margin-top: 2px;
+}
+
+.compra-rodape-frete{
+  background: var(--bege-escuro);
+  padding: 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.compra-frete-linha{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.compra-frete-linha input{
+  width: 190px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--marrom-claro);
+  background: var(--branco);
+  color: var(--marrom-escuro);
+  font-size: 0.9rem;
+}
+.compra-frete-linha input:focus{ border-color: var(--rosa); }
+.compra-total-linha{
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+}
+
+.compra-acoes{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.compra-btn-cancelar, .compra-btn-salvar{
+  border: none;
+  padding: 16px;
+  font-size: 0.92rem;
+  transition: filter 0.15s ease;
+}
+.compra-btn-cancelar{ background: var(--bege); color: var(--marrom-cafe); font-weight: 600; }
+.compra-btn-salvar{ background: var(--marrom-escuro); color: var(--bege-claro); font-weight: 700; }
+.compra-btn-cancelar:hover, .compra-btn-salvar:hover:not(:disabled){ filter: brightness(0.95); }
+.compra-btn-salvar:disabled{ opacity: 0.6; cursor: not-allowed; }
+
+.cartao-relatorio-compras{ gap: 14px; }
+.compras-resumo{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.mini-kpi{
+  background: var(--bege-claro);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.mini-kpi .kpi-titulo{ font-size: 0.72rem; }
+.mini-kpi-valor{ font-weight: 700; font-size: 1.05rem; word-break: break-word; }
+.aviso-aberto{
+  grid-column: 1 / -1;
+  background: #fff3d6;
+  color: #9a6a00;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+}
+.aviso-aberto:hover{ filter: brightness(0.97); }
+
+.compras-lista{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+.compra-item{
+  background: var(--bege-claro);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 1100px){
+  .compras-layout{ grid-template-columns: 1fr; }
+  .cartao-nova-compra{ min-height: 0; }
+}
+@media (max-width: 600px){
+  .compra-linha-item{ grid-template-columns: 1fr 1fr 40px; }
+  .compra-linha-item select{ grid-column: 1 / -1; }
+  .compras-resumo{ grid-template-columns: 1fr; }
+  .compra-frete-linha input{ width: 140px; }
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

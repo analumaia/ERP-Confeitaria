@@ -15,7 +15,7 @@ const MODULOS = {
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
       { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Embalagens, matéria-prima, descartáveis...' },
       { chave: 'unidade_medida', label: 'Unidade de medida', tipo: 'text', obrigatorio: true, placeholder: 'kg, un, litro...' },
-      { chave: 'custo_unitario', label: 'Custo unitário (R$)', tipo: 'number', passo: '0.0001' },
+      { chave: 'custo_unitario', label: 'Custo unitário (R$)', tipo: 'number', passo: '0.0001', placeholder: 'Até 4 casas decimais, ex.: 0,0075' },
       { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
     ],
     infoCampos: [

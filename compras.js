@@ -83,7 +83,7 @@ function adicionarLinhaItemCompra(){
     <div class="compra-linha-item">
       <select class="item-insumo" aria-label="Insumo">${opcoesInsumoHtml()}</select>
       <input type="number" class="item-quantidade" step="0.001" min="0.001" placeholder="Qtda" aria-label="Quantidade">
-      <input type="number" class="item-custo" step="0.0001" min="0" placeholder="Cust. un." aria-label="Custo unitário">
+      <input type="number" class="item-custo" step="0.0001" min="0" placeholder="Cust. un." title="Até 4 casas decimais" aria-label="Custo unitário">
       <button type="button" class="remover-item-compra" aria-label="Remover item">×</button>
     </div>
   `);
@@ -135,10 +135,14 @@ function resetarFormularioCompra(){
   recalcularTotalCompra();
 }
 
+// custo unitário aceita até 4 casas decimais (ex.: 0,0075)
+const temMaisDeQuatroCasas = n => Math.abs(n * 10000 - Math.round(n * 10000)) > 1e-6;
+
 // Lê as linhas: ignora as totalmente vazias e avisa sobre as pela metade
 function lerItensCompra(){
   const itens = [];
   let incompleto = false;
+  let casasDemais = false;
   itensCompra.querySelectorAll('.compra-linha-item').forEach(linha => {
     const insumoId = linha.querySelector('.item-insumo').value;
     const quantidade = Number(linha.querySelector('.item-quantidade').value);
@@ -148,9 +152,10 @@ function lerItensCompra(){
       incompleto = true;
       return;
     }
+    if (temMaisDeQuatroCasas(custoUnitario)) casasDemais = true;
     itens.push({ insumo_id: insumoId, quantidade, custo_unitario: custoUnitario || 0 });
   });
-  return { itens, incompleto };
+  return { itens, incompleto, casasDemais };
 }
 
 document.getElementById('btnAdicionarItemCompra').addEventListener('click', adicionarLinhaItemCompra);
@@ -172,7 +177,7 @@ formNovaCompra.addEventListener('submit', (evento) => {
 async function salvarNovaCompra(){
   const dataCompra = campoDataCompra.value;
   const frete = Number(campoFreteCompra.value) || 0;
-  const { itens, incompleto } = lerItensCompra();
+  const { itens, incompleto, casasDemais } = lerItensCompra();
 
   if (!dataCompra){
     mostrarToast('Informe a data da compra.', 'erro');
@@ -184,6 +189,10 @@ async function salvarNovaCompra(){
   }
   if (incompleto){
     mostrarToast('Complete insumo e quantidade de todos os itens, ou remova a linha.', 'erro');
+    return;
+  }
+  if (casasDemais){
+    mostrarToast('O custo unitário aceita até 4 casas decimais (ex.: 0,0075).', 'erro');
     return;
   }
   if (itens.length === 0){

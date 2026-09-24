@@ -35,27 +35,137 @@ function saldoDoItem(tipoItem, item){
   return registroSaldo ? Number(registroSaldo.saldo_atual) : 0;
 }
 
-function popularBuscaItemEstoque(){
-  const select = document.getElementById('buscaItemEstoque');
-  const valorSelecionado = select.value;
+// --------------------------------------------------------
+// Busca digitável de item (combobox): digite pra filtrar (sem
+// diferenciar acento/maiúscula); ↑/↓ + Enter ou clique escolhem.
+// --------------------------------------------------------
+const comboInput = document.getElementById('buscaItemEstoque');
+const comboLista = document.getElementById('listaComboItem');
+const comboLimpar = document.getElementById('btnLimparItemEstoque');
+let opcoesEstoque = [];       // [{ valor, nome, grupo, abaixo, inativo }]
+let valorItemSelecionado = ''; // "insumo:ID" / "produto:ID" ou '' quando nada escolhido
+let opcoesVisiveis = [];      // opções listadas agora, na ordem exibida
+let opcaoAtiva = -1;
+let comboFiltrando = false;   // true depois que a pessoa digita; false = lista inteira
 
-  function rotulo(item, tipoItem){
-    const saldo = saldoDoItem(tipoItem, item);
-    const abaixoDoMinimo = item.estoque_minimo != null && saldo < Number(item.estoque_minimo);
-    return (abaixoDoMinimo ? '⚠️ ' : '') + item.nome + (item.ativo === false ? ' (inativo)' : '');
+function normalizarBusca(texto){
+  return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function popularBuscaItemEstoque(){
+  const montar = (lista, tipoItem, grupo) => lista.map(item => ({
+    valor: `${tipoItem}:${item.id}`,
+    nome: item.nome,
+    grupo,
+    abaixo: item.estoque_minimo != null && saldoDoItem(tipoItem, item) < Number(item.estoque_minimo),
+    inativo: item.ativo === false,
+  }));
+  opcoesEstoque = [
+    ...montar(dadosEstoque.insumos, 'insumo', 'Insumos'),
+    ...montar(dadosEstoque.produtos, 'produto', 'Produtos'),
+  ];
+  if (!comboLista.hidden) renderizarListaCombo();
+}
+
+function renderizarListaCombo(){
+  const termo = comboFiltrando ? normalizarBusca(comboInput.value) : '';
+  opcoesVisiveis = opcoesEstoque.filter(o => !termo || normalizarBusca(o.nome).includes(termo));
+  if (opcaoAtiva >= opcoesVisiveis.length) opcaoAtiva = opcoesVisiveis.length - 1;
+
+  if (opcoesVisiveis.length === 0){
+    comboLista.innerHTML = '<div class="combo-vazio">Nenhum item encontrado.</div>';
+    return;
   }
 
-  select.innerHTML = `
-    <option value="">Selecione um insumo ou produto...</option>
-    <optgroup label="Insumos">
-      ${dadosEstoque.insumos.map(i => `<option value="insumo:${i.id}">${rotulo(i, 'insumo')}</option>`).join('')}
-    </optgroup>
-    <optgroup label="Produtos">
-      ${dadosEstoque.produtos.map(p => `<option value="produto:${p.id}">${rotulo(p, 'produto')}</option>`).join('')}
-    </optgroup>
-  `;
-  select.value = valorSelecionado;
+  let html = '';
+  let grupoAtual = '';
+  opcoesVisiveis.forEach((o, i) => {
+    if (o.grupo !== grupoAtual){
+      grupoAtual = o.grupo;
+      html += `<div class="combo-grupo" role="presentation">${o.grupo}</div>`;
+    }
+    const selecionada = o.valor === valorItemSelecionado;
+    html += `<div class="combo-opcao${i === opcaoAtiva ? ' ativa' : ''}${selecionada ? ' selecionada' : ''}" role="option" id="opcaoCombo${i}" data-indice="${i}" aria-selected="${selecionada}">${o.abaixo ? '⚠️ ' : ''}${o.nome}${o.inativo ? ' (inativo)' : ''}</div>`;
+  });
+  comboLista.innerHTML = html;
+
+  const ativa = comboLista.querySelector('.ativa');
+  if (ativa) ativa.scrollIntoView({ block: 'nearest' });
 }
+
+function abrirListaCombo(){
+  comboLista.hidden = false;
+  comboInput.setAttribute('aria-expanded', 'true');
+  renderizarListaCombo();
+}
+
+function fecharListaCombo(){
+  comboLista.hidden = true;
+  comboInput.setAttribute('aria-expanded', 'false');
+  comboInput.removeAttribute('aria-activedescendant');
+  opcaoAtiva = -1;
+  comboFiltrando = false;
+  // o campo sempre volta a mostrar o item realmente escolhido (ou vazio)
+  const escolhida = opcoesEstoque.find(o => o.valor === valorItemSelecionado);
+  comboInput.value = escolhida ? escolhida.nome : '';
+}
+
+function escolherOpcaoCombo(valor){
+  valorItemSelecionado = valor;
+  comboLimpar.hidden = false;
+  fecharListaCombo();
+  comboInput.blur();
+  buscarItemEstoque(valor);
+}
+
+comboInput.addEventListener('focus', () => {
+  comboInput.select();
+  abrirListaCombo();
+});
+comboInput.addEventListener('click', () => {
+  if (comboLista.hidden) abrirListaCombo();
+});
+comboInput.addEventListener('input', () => {
+  comboFiltrando = true;
+  opcaoAtiva = 0; // já deixa o primeiro resultado pronto pro Enter
+  abrirListaCombo();
+});
+comboInput.addEventListener('blur', fecharListaCombo);
+comboInput.addEventListener('keydown', (evento) => {
+  if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp'){
+    evento.preventDefault();
+    if (comboLista.hidden) abrirListaCombo();
+    const total = opcoesVisiveis.length;
+    if (total === 0) return;
+    if (opcaoAtiva < 0){
+      opcaoAtiva = evento.key === 'ArrowDown' ? 0 : total - 1;
+    } else {
+      opcaoAtiva = (opcaoAtiva + (evento.key === 'ArrowDown' ? 1 : -1) + total) % total;
+    }
+    renderizarListaCombo();
+    comboInput.setAttribute('aria-activedescendant', 'opcaoCombo' + opcaoAtiva);
+  } else if (evento.key === 'Enter'){
+    if (!comboLista.hidden && opcoesVisiveis.length > 0){
+      evento.preventDefault();
+      escolherOpcaoCombo(opcoesVisiveis[Math.max(opcaoAtiva, 0)].valor);
+    }
+  } else if (evento.key === 'Escape'){
+    fecharListaCombo();
+    comboInput.blur();
+  }
+});
+
+// mousedown (e não click) pra escolher antes de o campo perder o foco
+comboLista.addEventListener('mousedown', (evento) => {
+  evento.preventDefault();
+  const opcao = evento.target.closest('[data-indice]');
+  if (opcao) escolherOpcaoCombo(opcoesVisiveis[Number(opcao.dataset.indice)].valor);
+});
+comboLimpar.addEventListener('mousedown', (evento) => {
+  evento.preventDefault();
+  buscarItemEstoque('');
+  comboInput.focus();
+});
 
 // --------------------------------------------------------
 // Elementos fixos da tela (o HTML está em painel.html)
@@ -64,8 +174,6 @@ const campoPeriodoDe = document.getElementById('periodoEstoqueDe');
 const campoPeriodoAte = document.getElementById('periodoEstoqueAte');
 const botoesAcaoEstoque = ['btnEntradaItem', 'btnSaidaItem', 'btnBalancoItem'].map(id => document.getElementById(id));
 let requisicaoExtrato = 0; // evita que uma resposta antiga sobrescreva uma mais nova
-
-document.getElementById('buscaItemEstoque').addEventListener('change', (evento) => buscarItemEstoque(evento.target.value));
 
 document.getElementById('btnEntradaItem').addEventListener('click', () => {
   if (itemEstoqueAtual) abrirModalMovimento('entrada', itemEstoqueAtual.tipoItem, itemEstoqueAtual.itemId, itemEstoqueAtual.nome);
@@ -124,6 +232,9 @@ mostrarEstadoSemItem(); // estado inicial: nenhum item escolhido
 function mostrarEstadoSemItem(){
   itemEstoqueAtual = null;
   requisicaoExtrato++;
+  valorItemSelecionado = '';
+  comboInput.value = '';
+  comboLimpar.hidden = true;
   document.getElementById('etiquetasItemEstoque').innerHTML = '';
   botoesAcaoEstoque.forEach(botao => { botao.disabled = true; });
   ['saldoItemEstoque', 'totalEntradasEstoque', 'totalSaidasEstoque'].forEach(id => { document.getElementById(id).textContent = '—'; });
@@ -149,6 +260,9 @@ async function buscarItemEstoque(valor){
   const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
   const abaixoDoMinimo = item.estoque_minimo != null && saldoAtual < Number(item.estoque_minimo);
   itemEstoqueAtual = { tipoItem, itemId, nome: item.nome, saldoAtual, unidade };
+  valorItemSelecionado = valor;
+  comboLimpar.hidden = false;
+  if (document.activeElement !== comboInput) comboInput.value = item.nome;
 
   document.getElementById('etiquetasItemEstoque').innerHTML =
     (item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : '') +

@@ -47,14 +47,53 @@
   <section class="conteudo-modulo" data-modulo="estoque">
     <div class="barra-modulo"><h2>Estoque</h2></div>
 
-    <div class="barra-modulo">
-      <select id="buscaItemEstoque" class="campo-busca" style="max-width:380px; font-size:0.95rem; padding:12px 16px;">
-        <option value="">Buscar insumo ou produto...</option>
-      </select>
+    <div class="filtro-periodo filtro-periodo-largo">
+      <label for="periodoEstoqueDe">Período:</label>
+      <input type="date" id="periodoEstoqueDe" aria-label="Data inicial">
+      <span>até</span>
+      <input type="date" id="periodoEstoqueAte" aria-label="Data final">
+      <div class="chips-periodo">
+        <button type="button" class="chip-periodo" data-periodo-estoque="mes">Este mês</button>
+        <button type="button" class="chip-periodo" data-periodo-estoque="anterior">Mês anterior</button>
+        <button type="button" class="chip-periodo" data-periodo-estoque="tudo">Tudo</button>
+      </div>
     </div>
 
-    <div id="areaItemEstoque">
-      <div class="lista-vazia">Busque um insumo ou produto acima pra ver o saldo, o resumo e o extrato completo de movimentações dele.</div>
+    <div class="cartao-item item-estoque">
+      <div class="item-estoque-topo">
+        <select id="buscaItemEstoque" class="select-item-estoque" aria-label="Insumo ou produto">
+          <option value="">Selecione um insumo ou produto...</option>
+        </select>
+        <div class="etiquetas-item" id="etiquetasItemEstoque"></div>
+      </div>
+      <div class="acoes-estoque">
+        <button type="button" class="btn-acao" id="btnEntradaItem" disabled>+ Entrada</button>
+        <button type="button" class="btn-acao" id="btnSaidaItem" disabled>− Saída</button>
+        <button type="button" class="btn-acao" id="btnBalancoItem" disabled>📋 Balanço</button>
+      </div>
+    </div>
+
+    <div class="estoque-resumo">
+      <div class="cartao-item kpi">
+        <div class="kpi-titulo">Saldo atual</div>
+        <div class="kpi-valor" id="saldoItemEstoque">—</div>
+        <div class="item-sub" id="minimoItemEstoque"></div>
+      </div>
+      <div class="cartao-item kpi">
+        <div class="kpi-titulo">Total de entradas</div>
+        <div class="kpi-valor valor-entrada" id="totalEntradasEstoque">—</div>
+        <div class="item-sub" id="subEntradasEstoque"></div>
+      </div>
+      <div class="cartao-item kpi">
+        <div class="kpi-titulo">Total de saídas</div>
+        <div class="kpi-valor valor-saida" id="totalSaidasEstoque">—</div>
+        <div class="item-sub" id="subSaidasEstoque"></div>
+      </div>
+    </div>
+
+    <div class="cartao-item relatorio-estoque">
+      <div class="titulo-item"><span>Extrato de movimentações</span><span class="item-sub" id="notaExtratoEstoque"></span></div>
+      <div id="tabelaItemEstoque"></div>
     </div>
   </section>
 

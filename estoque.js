@@ -4,7 +4,7 @@
    com ações de entrada, saída e balanço (contagem física).
    ============================================================ */
 
-let itemEstoqueAtual = null; // { tipoItem, itemId } do item em exibição no momento
+let itemEstoqueAtual = null; // { tipoItem, itemId, nome, saldoAtual, unidade } do item em exibição no momento
 
 async function carregarEstoque(){
   const [respInsumos, respProdutos] = await Promise.all([
@@ -46,7 +46,7 @@ function popularBuscaItemEstoque(){
   }
 
   select.innerHTML = `
-    <option value="">Buscar insumo ou produto...</option>
+    <option value="">Selecione um insumo ou produto...</option>
     <optgroup label="Insumos">
       ${dadosEstoque.insumos.map(i => `<option value="insumo:${i.id}">${rotulo(i, 'insumo')}</option>`).join('')}
     </optgroup>
@@ -57,91 +57,162 @@ function popularBuscaItemEstoque(){
   select.value = valorSelecionado;
 }
 
+// --------------------------------------------------------
+// Elementos fixos da tela (o HTML está em painel.html)
+// --------------------------------------------------------
+const campoPeriodoDe = document.getElementById('periodoEstoqueDe');
+const campoPeriodoAte = document.getElementById('periodoEstoqueAte');
+const botoesAcaoEstoque = ['btnEntradaItem', 'btnSaidaItem', 'btnBalancoItem'].map(id => document.getElementById(id));
+let requisicaoExtrato = 0; // evita que uma resposta antiga sobrescreva uma mais nova
+
 document.getElementById('buscaItemEstoque').addEventListener('change', (evento) => buscarItemEstoque(evento.target.value));
 
-async function buscarItemEstoque(valor){
-  const area = document.getElementById('areaItemEstoque');
+document.getElementById('btnEntradaItem').addEventListener('click', () => {
+  if (itemEstoqueAtual) abrirModalMovimento('entrada', itemEstoqueAtual.tipoItem, itemEstoqueAtual.itemId, itemEstoqueAtual.nome);
+});
+document.getElementById('btnSaidaItem').addEventListener('click', () => {
+  if (itemEstoqueAtual) abrirModalMovimento('saida', itemEstoqueAtual.tipoItem, itemEstoqueAtual.itemId, itemEstoqueAtual.nome);
+});
+document.getElementById('btnBalancoItem').addEventListener('click', () => {
+  const i = itemEstoqueAtual;
+  if (i) abrirModalBalancoItem(i.tipoItem, i.itemId, i.nome, i.saldoAtual, i.unidade);
+});
 
+// --------------------------------------------------------
+// Período — filtra os totais de entradas/saídas e o extrato.
+// O saldo atual nunca depende dele.
+// --------------------------------------------------------
+function dataLocalISO(data){
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+}
+
+function definirPeriodoEstoque(tipo){
+  const hoje = new Date();
+  let de = '', ate = '';
+  if (tipo === 'mes'){
+    de = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    ate = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+  } else if (tipo === 'anterior'){
+    de = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+    ate = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 0));
+  }
+  campoPeriodoDe.value = de;
+  campoPeriodoAte.value = ate;
+  recarregarExtratoAtual();
+}
+
+function recarregarExtratoAtual(){
+  if (!itemEstoqueAtual) return;
+  if (campoPeriodoDe.value && campoPeriodoAte.value && campoPeriodoDe.value > campoPeriodoAte.value){
+    mostrarToast('A data inicial não pode ser depois da data final.', 'erro');
+    return;
+  }
+  carregarExtratoItem();
+}
+
+campoPeriodoDe.addEventListener('change', recarregarExtratoAtual);
+campoPeriodoAte.addEventListener('change', recarregarExtratoAtual);
+document.querySelectorAll('[data-periodo-estoque]').forEach(botao => {
+  botao.addEventListener('click', () => definirPeriodoEstoque(botao.dataset.periodoEstoque));
+});
+definirPeriodoEstoque('mes'); // começa no mês atual
+mostrarEstadoSemItem(); // estado inicial: nenhum item escolhido
+
+// --------------------------------------------------------
+// Item selecionado
+// --------------------------------------------------------
+function mostrarEstadoSemItem(){
+  itemEstoqueAtual = null;
+  requisicaoExtrato++;
+  document.getElementById('etiquetasItemEstoque').innerHTML = '';
+  botoesAcaoEstoque.forEach(botao => { botao.disabled = true; });
+  ['saldoItemEstoque', 'totalEntradasEstoque', 'totalSaidasEstoque'].forEach(id => { document.getElementById(id).textContent = '—'; });
+  ['minimoItemEstoque', 'subEntradasEstoque', 'subSaidasEstoque', 'notaExtratoEstoque'].forEach(id => { document.getElementById(id).textContent = ''; });
+  document.getElementById('tabelaItemEstoque').innerHTML = '<div class="lista-vazia">Escolha um insumo ou produto acima pra ver o saldo, os totais do período e o extrato de movimentações.</div>';
+}
+
+async function buscarItemEstoque(valor){
   if (!valor){
-    itemEstoqueAtual = null;
-    area.innerHTML = '<div class="lista-vazia">Busque um insumo ou produto acima pra ver o saldo, o resumo e o extrato completo de movimentações dele.</div>';
+    mostrarEstadoSemItem();
     return;
   }
 
   const [tipoItem, itemId] = valor.split(':');
-  itemEstoqueAtual = { tipoItem, itemId };
-
   const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
   const item = lista.find(r => String(r.id) === String(itemId));
-  if (!item) return;
+  if (!item){
+    mostrarEstadoSemItem();
+    return;
+  }
 
   const saldoAtual = saldoDoItem(tipoItem, item);
   const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
   const abaixoDoMinimo = item.estoque_minimo != null && saldoAtual < Number(item.estoque_minimo);
+  itemEstoqueAtual = { tipoItem, itemId, nome: item.nome, saldoAtual, unidade };
 
-  area.innerHTML = `
-    <div class="cartao-item" style="margin-bottom:14px;">
-      <div class="titulo-item">
-        <span style="font-size:1.15rem;">${item.nome}</span>
-        ${item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : ''}
-        ${abaixoDoMinimo ? '<span class="badge-estoque-baixo">Abaixo do mínimo</span>' : ''}
-      </div>
-      <div class="acoes-item" style="margin-top:10px;">
-        <button class="btn-acao" id="btnEntradaItem">+ Entrada</button>
-        <button class="btn-acao" id="btnSaidaItem">− Saída</button>
-        <button class="btn-acao" id="btnBalancoItem">📋 Balanço</button>
-      </div>
-    </div>
-    <div class="lista-cards" id="resumoItemEstoque" style="margin-bottom:14px;"></div>
-    <div id="tabelaItemEstoque"></div>
-  `;
+  document.getElementById('etiquetasItemEstoque').innerHTML =
+    (item.ativo === false ? '<span class="badge-inativo">Inativo</span>' : '') +
+    (abaixoDoMinimo ? '<span class="badge-estoque-baixo">Abaixo do estoque mínimo</span>' : '');
+  botoesAcaoEstoque.forEach(botao => { botao.disabled = false; });
+  document.getElementById('saldoItemEstoque').textContent = `${saldoAtual.toLocaleString('pt-BR')} ${unidade}`;
+  document.getElementById('minimoItemEstoque').textContent = item.estoque_minimo != null
+    ? `Estoque mínimo: ${Number(item.estoque_minimo).toLocaleString('pt-BR')} ${unidade}`
+    : 'Sem estoque mínimo definido';
 
-  document.getElementById('btnEntradaItem').addEventListener('click', () => abrirModalMovimento('entrada', tipoItem, itemId, item.nome));
-  document.getElementById('btnSaidaItem').addEventListener('click', () => abrirModalMovimento('saida', tipoItem, itemId, item.nome));
-  document.getElementById('btnBalancoItem').addEventListener('click', () => abrirModalBalancoItem(tipoItem, itemId, item.nome, saldoAtual, unidade));
-
-  await carregarExtratoItem(tipoItem, itemId, saldoAtual, unidade);
+  await carregarExtratoItem();
 }
 
-async function carregarExtratoItem(tipoItem, itemId, saldoAtual, unidade){
-  const resumo = document.getElementById('resumoItemEstoque');
-  const tabela = document.getElementById('tabelaItemEstoque');
-  resumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
-  tabela.innerHTML = '';
+const LIMITE_EXTRATO = 1000;
 
-  const { data, error } = await supabaseClient
+async function carregarExtratoItem(){
+  const { tipoItem, itemId, unidade } = itemEstoqueAtual;
+  const requisicao = ++requisicaoExtrato;
+  const tabela = document.getElementById('tabelaItemEstoque');
+  const elEntradas = document.getElementById('totalEntradasEstoque');
+  const elSaidas = document.getElementById('totalSaidasEstoque');
+
+  tabela.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  elEntradas.textContent = '…';
+  elSaidas.textContent = '…';
+
+  let consulta = supabaseClient
     .from('movimentacoes_estoque')
     .select('*')
     .eq('tipo_item', tipoItem)
-    .eq('item_id', itemId)
-    .order('criado_em', { ascending: false })
-    .limit(300);
+    .eq('item_id', itemId);
+  if (campoPeriodoDe.value){
+    consulta = consulta.gte('criado_em', new Date(campoPeriodoDe.value + 'T00:00:00').toISOString());
+  }
+  if (campoPeriodoAte.value){
+    consulta = consulta.lte('criado_em', new Date(campoPeriodoAte.value + 'T23:59:59.999').toISOString());
+  }
+  const { data, error } = await consulta.order('criado_em', { ascending: false }).limit(LIMITE_EXTRATO);
+
+  if (requisicao !== requisicaoExtrato) return; // o item ou o período mudou enquanto carregava
 
   if (error){
-    resumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o extrato deste item.</div>';
+    elEntradas.textContent = '—';
+    elSaidas.textContent = '—';
+    tabela.innerHTML = '<div class="lista-vazia">Não foi possível carregar o extrato deste item.</div>';
     return;
   }
 
-  const totalEntradas = data.filter(m => m.tipo_movimento === 'entrada').reduce((s, m) => s + Number(m.quantidade), 0);
-  const totalSaidas = data.filter(m => m.tipo_movimento === 'saida').reduce((s, m) => s + Number(m.quantidade), 0);
+  const entradas = data.filter(m => m.tipo_movimento === 'entrada');
+  const saidas = data.filter(m => m.tipo_movimento === 'saida');
+  const totalEntradas = entradas.reduce((s, m) => s + Number(m.quantidade), 0);
+  const totalSaidas = saidas.reduce((s, m) => s + Number(m.quantidade), 0);
+  const rotuloMov = n => `${n} ${n === 1 ? 'movimentação' : 'movimentações'}`;
 
-  resumo.innerHTML = `
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Saldo atual</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span>${saldoAtual.toLocaleString('pt-BR')} ${unidade}</span></div>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Total de entradas</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${totalEntradas.toLocaleString('pt-BR')} ${unidade}</span></div>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Total de saídas</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-saida">${totalSaidas.toLocaleString('pt-BR')} ${unidade}</span></div>
-    </div>
-  `;
+  elEntradas.textContent = `${totalEntradas.toLocaleString('pt-BR')} ${unidade}`;
+  elSaidas.textContent = `${totalSaidas.toLocaleString('pt-BR')} ${unidade}`;
+  document.getElementById('subEntradasEstoque').textContent = rotuloMov(entradas.length);
+  document.getElementById('subSaidasEstoque').textContent = rotuloMov(saidas.length);
+  document.getElementById('notaExtratoEstoque').textContent = data.length >= LIMITE_EXTRATO
+    ? `Mostrando as ${LIMITE_EXTRATO.toLocaleString('pt-BR')} mais recentes — os totais consideram só essas`
+    : rotuloMov(data.length);
 
   if (data.length === 0){
-    tabela.innerHTML = '<div class="lista-vazia">Nenhuma movimentação registrada pra este item ainda.</div>';
+    tabela.innerHTML = '<div class="lista-vazia">Nenhuma movimentação deste item no período.</div>';
     return;
   }
 
@@ -159,7 +230,7 @@ async function carregarExtratoItem(tipoItem, itemId, saldoAtual, unidade){
                 <td>${dataFormatada}</td>
                 <td>${m.tipo_movimento === 'entrada' ? `<span class="valor-entrada">+${Number(m.quantidade).toLocaleString('pt-BR')}</span>` : '-'}</td>
                 <td>${m.tipo_movimento === 'saida' ? `<span class="valor-saida">−${Number(m.quantidade).toLocaleString('pt-BR')}</span>` : '-'}</td>
-                <td>${capitalizar(m.origem)}</td>
+                <td>${capitalizar(String(m.origem).replace(/_/g, ' '))}</td>
                 <td>${m.observacao || '-'}</td>
               </tr>
             `;

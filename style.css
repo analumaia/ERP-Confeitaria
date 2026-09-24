@@ -768,6 +768,96 @@ h1, h2, h3, .fonte-titulo{
 }
 
 /* ---------------------------------------------------------
+   ESTOQUE (tela de um item: saldo, totais do período e extrato)
+--------------------------------------------------------- */
+.filtro-periodo-largo{
+  flex-wrap: wrap;
+  max-width: 860px;
+  border-radius: 22px;
+  padding: 6px 10px 6px 16px;
+  margin-bottom: 16px;
+}
+.chips-periodo{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.chip-periodo{
+  background: var(--bege-claro);
+  color: var(--marrom-escuro);
+  border: none;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.chip-periodo:hover{ background: var(--rosa-claro); }
+
+.item-estoque{
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.item-estoque-topo{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.select-item-estoque{
+  flex: 1;
+  min-width: 220px;
+  max-width: 520px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--marrom-claro);
+  background: var(--branco);
+  color: var(--marrom-escuro);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.select-item-estoque:focus{ border-color: var(--rosa); }
+.etiquetas-item{ display: flex; gap: 8px; flex-wrap: wrap; }
+
+.acoes-estoque{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.acoes-estoque .btn-acao{
+  border-radius: 999px;
+  padding: 12px;
+  font-size: 0.9rem;
+  background: var(--bege);
+  border-color: var(--bege);
+}
+.acoes-estoque .btn-acao:hover:not(:disabled){ background: var(--rosa-claro); border-color: var(--rosa-claro); }
+.btn-acao:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+.estoque-resumo{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.estoque-resumo .kpi{ min-height: 112px; }
+
+.relatorio-estoque{ min-height: 300px; }
+.relatorio-estoque .tabela-container{
+  box-shadow: none;
+  border: 1px solid var(--bege);
+  max-height: 560px;
+  overflow: auto;
+}
+.relatorio-estoque .tabela-movimentacoes th{ position: sticky; top: 0; }
+
+@media (max-width: 700px){
+  .estoque-resumo{ grid-template-columns: 1fr; }
+  .chips-periodo{ margin-left: 0; }
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

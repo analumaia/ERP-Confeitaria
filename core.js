@@ -120,8 +120,10 @@ function trocarAba(chave){
     carregarEstoque(); // sempre atualiza, pois o saldo muda com frequência
   } else if (chave === 'compras'){
     carregarCompras();
-  } else if (chave === 'producao' || chave === 'fichas'){
+  } else if (chave === 'producao'){
     carregarProducao();
+  } else if (chave === 'fichas'){
+    carregarFichas();
   } else if (chave === 'vendas'){
     carregarVendas();
   } else if (chave === 'financeiro'){

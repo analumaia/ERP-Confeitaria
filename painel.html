@@ -132,6 +132,7 @@
             <label for="campoFreteCompra">Frete</label>
             <input type="number" id="campoFreteCompra" min="0" step="0.01" value="0" placeholder="Valor">
           </div>
+          <div class="item-sub" id="rateioFreteCompra"></div>
           <div class="compra-total-linha"><span>Total da compra</span><span id="totalCompra">R$ 0,00</span></div>
         </div>
 
@@ -175,7 +176,46 @@
   <!-- FICHAS TÉCNICAS -->
   <section class="conteudo-modulo" data-modulo="fichas">
     <div class="barra-modulo"><h2>Fichas técnicas</h2></div>
-    <div class="lista-cards" id="listaFichasTecnicas"></div>
+
+    <div class="fichas-layout">
+
+      <!-- Nova ficha técnica / editar (formulário fixo) -->
+      <form class="cartao-item cartao-nova-compra" id="formFicha" novalidate>
+        <div class="compra-corpo">
+          <h3 class="compra-titulo" id="tituloFormFicha">Nova ficha técnica</h3>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoNomeFicha">Nome</label>
+              <input type="text" id="campoNomeFicha" placeholder="Massa de baunilha, recheio de brigadeiro...">
+            </div>
+            <div class="form-grupo" style="display:flex; gap:8px;">
+              <div style="flex:1;">
+                <label for="campoRendimentoFicha">Rendimento</label>
+                <input type="number" id="campoRendimentoFicha" step="0.0001" min="0.0001" placeholder="Ex.: 2000" title="Até 4 casas decimais">
+              </div>
+              <div style="width:90px;">
+                <label for="campoUnidadeFicha">Unidade</label>
+                <input type="text" id="campoUnidadeFicha" placeholder="g, ml, un">
+              </div>
+            </div>
+          </div>
+
+          <div class="compra-secao-titulo">Item</div>
+          <div id="itensFicha"></div>
+          <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemFicha">+ Adicionar insumo</button>
+        </div>
+
+        <div class="compra-acoes">
+          <button type="button" class="compra-btn-cancelar" id="btnCancelarFicha">Cancelar</button>
+          <button type="submit" class="compra-btn-salvar" id="btnSalvarFicha">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Fichas cadastradas -->
+      <div class="lista-cards fichas-grade" id="listaFichas"></div>
+
+    </div>
   </section>
 
   <!-- VENDAS -->
@@ -346,6 +386,7 @@
 <script src="dashboard.js"></script>
 <script src="estoque.js"></script>
 <script src="compras.js"></script>
+<script src="fichas.js"></script>
 <script src="producao.js"></script>
 <script src="vendas.js"></script>
 <script src="financeiro.js"></script>

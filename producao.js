@@ -1,56 +1,26 @@
 /* ============================================================
-   PRODUÇÃO — ficha técnica (o que cada produto consome de
-   insumo) e registro de produção (que desconta insumo e credita
-   produto acabado automaticamente via trigger no banco).
+   PRODUÇÃO — registro de produção (desconta insumo e credita
+   produto acabado automaticamente via trigger no banco, com base
+   na composição do produto — ver cadastros.js e fichas.js).
    ============================================================ */
 
 async function carregarProducao(){
-  const containerFichas = document.getElementById('listaFichasTecnicas');
   const containerProducoes = document.getElementById('listaProducoes');
-  containerFichas.innerHTML = '<div class="lista-vazia">Carregando...</div>';
   containerProducoes.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
-  const [respProdutos, respProducoes] = await Promise.all([
-    supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true).order('nome'),
-    supabaseClient.from('producoes').select('*, produtos(nome)').order('criado_em', { ascending: false }).limit(20),
-  ]);
+  const { data, error } = await supabaseClient
+    .from('producoes')
+    .select('*, produtos(nome)')
+    .order('criado_em', { ascending: false })
+    .limit(20);
 
-  if (respProdutos.error || respProducoes.error){
+  if (error){
+    containerProducoes.innerHTML = '<div class="lista-vazia">Não foi possível carregar as produções.</div>';
     mostrarToast('Erro ao carregar dados de produção.', 'erro');
     return;
   }
 
-  dadosCarregados.produtosComFicha = respProdutos.data;
-  renderizarFichasTecnicas(respProdutos.data);
-  renderizarProducoes(respProducoes.data);
-}
-
-function renderizarFichasTecnicas(produtos){
-  const container = document.getElementById('listaFichasTecnicas');
-  if (produtos.length === 0){
-    container.innerHTML = '<div class="lista-vazia">Cadastre produtos ativos primeiro.</div>';
-    return;
-  }
-
-  container.innerHTML = produtos.map(produto => {
-    const qtdInsumos = produto.ficha_tecnica_itens.length;
-    return `
-      <div class="cartao-item">
-        <div class="titulo-item"><span>${produto.nome}</span></div>
-        <div class="linha-info">
-          <span>Ficha técnica</span>
-          <span>${qtdInsumos > 0 ? qtdInsumos + ' insumo(s)' : 'não cadastrada'}</span>
-        </div>
-        <div class="acoes-item">
-          <button class="btn-acao" data-editar-ficha="${produto.id}" data-nome-produto="${produto.nome}">Editar ficha técnica</button>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  container.querySelectorAll('[data-editar-ficha]').forEach(botao => {
-    botao.addEventListener('click', () => abrirModalFichaTecnica(botao.dataset.editarFicha, botao.dataset.nomeProduto));
-  });
+  renderizarProducoes(data);
 }
 
 function renderizarProducoes(producoes){
@@ -73,110 +43,14 @@ function renderizarProducoes(producoes){
   }).join('');
 }
 
-// --------- Editar ficha técnica ---------
-function linhaItemFichaHtml(insumos, insumoSelecionadoId, quantidadeAtual){
-  const opcoes = insumos.map(i => `<option value="${i.id}" ${String(i.id) === String(insumoSelecionadoId) ? 'selected' : ''}>${i.nome} (${i.unidade_medida})</option>`).join('');
-  return `
-    <div class="form-linha-item-compra" style="display:grid; grid-template-columns:2fr 1fr auto; gap:8px; align-items:end; margin-bottom:10px;">
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Insumo</label>
-        <select class="ficha-insumo" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-          <option value="">Selecione...</option>
-          ${opcoes}
-        </select>
-      </div>
-      <div>
-        <label style="display:block; font-size:0.72rem; font-weight:600; margin-bottom:4px;">Qtd. por unidade</label>
-        <input type="number" step="0.0001" min="0.0001" class="ficha-quantidade" value="${quantidadeAtual != null ? quantidadeAtual : ''}" style="width:100%; padding:9px; border-radius:10px; border:1.5px solid var(--marrom-claro);">
-      </div>
-      <button type="button" class="btn-acao excluir remover-item-ficha" style="padding:9px;">×</button>
-    </div>
-  `;
-}
-
-async function abrirModalFichaTecnica(produtoId, nomeProduto){
-  modoModal = { modo: 'ficha_tecnica', produtoId };
-
-  const [respItensAtuais, respInsumos] = await Promise.all([
-    supabaseClient.from('ficha_tecnica_itens').select('*').eq('produto_id', produtoId),
-    supabaseClient.from('insumos').select('*').eq('ativo', true).order('nome'),
-  ]);
-
-  const itensAtuais = respItensAtuais.data || [];
-  const insumosAtivos = respInsumos.data || [];
-
-  modalTitulo.textContent = 'Ficha técnica — ' + nomeProduto;
-  modalCampos.innerHTML = `
-    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:0;">Quanto de cada insumo 1 unidade deste produto consome.</p>
-    <div id="itensFicha"></div>
-    <button type="button" class="btn-secundario" id="btnAdicionarItemFicha" style="margin-top:4px;">+ Adicionar insumo</button>
-  `;
-
-  const itensFicha = document.getElementById('itensFicha');
-
-  if (itensAtuais.length === 0){
-    itensFicha.insertAdjacentHTML('beforeend', linhaItemFichaHtml(insumosAtivos, null, null));
-  } else {
-    itensAtuais.forEach(item => {
-      itensFicha.insertAdjacentHTML('beforeend', linhaItemFichaHtml(insumosAtivos, item.insumo_id, item.quantidade));
-    });
-  }
-
-  document.getElementById('btnAdicionarItemFicha').addEventListener('click', () => {
-    itensFicha.insertAdjacentHTML('beforeend', linhaItemFichaHtml(insumosAtivos, null, null));
-  });
-
-  itensFicha.addEventListener('click', (evento) => {
-    if (evento.target.classList.contains('remover-item-ficha')){
-      evento.target.closest('.form-linha-item-compra').remove();
-    }
-  });
-
-  modalOverlay.classList.add('aberto');
-}
-
-async function salvarFichaTecnica(){
-  const { produtoId } = modoModal;
-
-  const itens = [];
-  document.querySelectorAll('#itensFicha .form-linha-item-compra').forEach(linha => {
-    const insumoId = linha.querySelector('.ficha-insumo').value;
-    const quantidade = Number(linha.querySelector('.ficha-quantidade').value);
-    if (insumoId && quantidade > 0){
-      itens.push({ produto_id: produtoId, insumo_id: insumoId, quantidade });
-    }
-  });
-
-  const btnSalvar = document.getElementById('btnSalvarModal');
-  btnSalvar.disabled = true;
-  btnSalvar.textContent = 'Salvando...';
-
-  // substitui a ficha inteira: apaga os itens antigos e insere os atuais
-  const { error: erroDelete } = await supabaseClient.from('ficha_tecnica_itens').delete().eq('produto_id', produtoId);
-  let erroInsert = null;
-  if (!erroDelete && itens.length > 0){
-    ({ error: erroInsert } = await supabaseClient.from('ficha_tecnica_itens').insert(itens));
-  }
-
-  btnSalvar.disabled = false;
-  btnSalvar.textContent = 'Salvar';
-
-  if (erroDelete || erroInsert){
-    mostrarToast('Não foi possível salvar a ficha técnica.', 'erro');
-    return;
-  }
-
-  mostrarToast('Ficha técnica salva!');
-  fecharModal();
-  carregarProducao();
-}
-
 // --------- Nova produção ---------
 document.getElementById('btnNovaProducao').addEventListener('click', abrirModalNovaProducao);
 
 async function abrirModalNovaProducao(){
   modoModal = { modo: 'producao' };
 
+  // ficha_tecnica_itens agora é derivada da composição (fichas + insumos diretos)
+  // pelo trigger do banco — "sem composição" continua querendo dizer "não desconta insumo"
   const { data: produtosAtivos } = await supabaseClient.from('produtos').select('*, ficha_tecnica_itens(id)').eq('ativo', true).order('nome');
 
   modalTitulo.textContent = 'Nova produção';
@@ -185,7 +59,7 @@ async function abrirModalNovaProducao(){
       <label for="campoProdutoProducao">Produto</label>
       <select id="campoProdutoProducao">
         <option value="">Selecione...</option>
-        ${(produtosAtivos || []).map(p => `<option value="${p.id}">${p.nome}${p.ficha_tecnica_itens.length === 0 ? ' (sem ficha técnica)' : ''}</option>`).join('')}
+        ${(produtosAtivos || []).map(p => `<option value="${p.id}">${p.nome}${p.ficha_tecnica_itens.length === 0 ? ' (sem composição)' : ''}</option>`).join('')}
       </select>
     </div>
     <div class="form-grupo">
@@ -200,7 +74,7 @@ async function abrirModalNovaProducao(){
       <label for="campoObservacaoProducao">Observação (opcional)</label>
       <input type="text" id="campoObservacaoProducao">
     </div>
-    <p style="font-size:0.78rem; color:var(--marrom-cafe);">Se o produto não tiver ficha técnica, a produção é registrada mas nenhum insumo é descontado do estoque.</p>
+    <p style="font-size:0.78rem; color:var(--marrom-cafe);">Se o produto não tiver composição definida (em Produtos), a produção é registrada mas nenhum insumo é descontado do estoque.</p>
   `;
 
   modalOverlay.classList.add('aberto');

@@ -1097,6 +1097,83 @@ h1, h2, h3, .fonte-titulo{
 }
 
 /* ---------------------------------------------------------
+   FICHAS TÉCNICAS (formulário fixo à esquerda + grade de cards)
+   e COMPOSIÇÃO DO PRODUTO (dentro do modal de Produtos)
+--------------------------------------------------------- */
+.fichas-layout{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.fichas-grade{
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-content: start;
+}
+
+.ficha-card{ padding: 0; gap: 0; overflow: hidden; }
+.ficha-card-corpo{ padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.ficha-produtos{ margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
+.tag-produto{
+  display: inline-block;
+  background: var(--bege);
+  color: var(--marrom-escuro);
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin: 0 6px 6px 0;
+}
+.ficha-card-acoes{ display: grid; grid-template-columns: 1fr 1fr; }
+.ficha-btn-excluir, .ficha-btn-editar{
+  border: none;
+  padding: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.ficha-btn-excluir{ background: var(--vermelho-bg); color: var(--vermelho); }
+.ficha-btn-editar{ background: var(--bege); color: var(--marrom-escuro); }
+.ficha-btn-excluir:hover, .ficha-btn-editar:hover{ filter: brightness(0.96); }
+
+/* linha de item reaproveitada por Fichas técnicas e pela Composição do produto */
+.ficha-linha-item{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 40px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.ficha-linha-item select,
+.ficha-linha-item input{
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--marrom-claro);
+  background: var(--branco);
+  color: var(--marrom-escuro);
+  font-size: 0.88rem;
+}
+.ficha-linha-item select:focus,
+.ficha-linha-item input:focus{ border-color: var(--rosa); }
+
+.composicao-secao{
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bege);
+}
+.composicao-linha{ grid-template-columns: 150px minmax(0, 1fr) 92px 40px; }
+
+@media (max-width: 1100px){
+  .fichas-layout{ grid-template-columns: 1fr; }
+}
+@media (max-width: 640px){
+  .composicao-linha{ grid-template-columns: 1fr 1fr 40px; }
+  .composicao-linha .composicao-tipo,
+  .composicao-linha .composicao-item{ grid-column: 1 / -1; }
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

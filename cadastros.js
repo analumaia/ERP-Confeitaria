@@ -14,6 +14,7 @@ const MODULOS = {
     tabela: 'insumos',
     icone: '🌾',
     tituloCampo: 'nome',
+    nomeSingular: 'insumo',
     temAtivo: true,
     campos: [
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
@@ -33,11 +34,15 @@ const MODULOS = {
     tabela: 'fornecedores',
     icone: '📦',
     tituloCampo: 'nome',
+    tituloLabel: 'Nome do fornecedor',
+    nomeSingular: 'fornecedor',
     temAtivo: false,
+    visualizacao: 'tabela',
+    modalSemLabel: true,
     campos: [
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
-      { chave: 'contato', label: 'Contato (telefone/e-mail)', tipo: 'text' },
-      { chave: 'prazo_entrega_dias', label: 'Prazo de entrega (dias)', tipo: 'number' },
+      { chave: 'contato', label: 'Telefone/email', tipo: 'text' },
+      { chave: 'prazo_entrega_dias', label: 'Prazo (dias)', tipo: 'number' },
     ],
     infoCampos: [
       { chave: 'contato', label: 'Contato' },
@@ -48,6 +53,7 @@ const MODULOS = {
     tabela: 'clientes',
     icone: '👤',
     tituloCampo: 'nome',
+    nomeSingular: 'cliente',
     temAtivo: false,
     campos: [
       { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
@@ -105,7 +111,6 @@ async function carregarModulo(chave){
 
 function renderizarLista(chave){
   const config = MODULOS[chave];
-  const container = document.querySelector(`[data-lista="${chave}"]`);
   const termoBusca = (document.querySelector(`[data-busca="${chave}"]`).value || '').trim().toLowerCase();
 
   let registros = dadosCarregados[chave] || [];
@@ -116,8 +121,15 @@ function renderizarLista(chave){
     );
   }
 
+  if (config.visualizacao === 'tabela'){
+    renderizarTabelaGenerica(chave, config, registros);
+    return;
+  }
+
+  const container = document.querySelector(`[data-lista="${chave}"]`);
+
   if (registros.length === 0){
-    container.innerHTML = `<div class="lista-vazia">Nenhum ${NOMES_MODULO[chave].slice(0, -1)} encontrado.</div>`;
+    container.innerHTML = `<div class="lista-vazia">Nenhum ${config.nomeSingular} encontrado.</div>`;
     return;
   }
 
@@ -152,6 +164,37 @@ function renderizarLista(chave){
   });
 }
 
+// Visualização em tabela (relatório): usada por módulos com
+// visualizacao: 'tabela' (hoje só Fornecedores) — mesmas colunas de
+// infoCampos, mais Editar e Excluir em colunas próprias, como no
+// layout desenhado.
+function renderizarTabelaGenerica(chave, config, registros){
+  const corpo = document.querySelector(`[data-tabela-corpo="${chave}"]`);
+  const colunas = 2 + config.infoCampos.length + (config.temAtivo ? 1 : 0);
+
+  if (registros.length === 0){
+    corpo.innerHTML = `<tr><td colspan="${colunas}" class="lista-vazia">Nenhum ${config.nomeSingular} encontrado.</td></tr>`;
+    return;
+  }
+
+  corpo.innerHTML = registros.map(registro => `
+    <tr>
+      <td class="celula-principal">${registro[config.tituloCampo]}</td>
+      ${config.infoCampos.map(info => `<td>${formatarValor(registro, info)}</td>`).join('')}
+      <td><button type="button" class="btn-acao" data-editar="${chave}" data-id="${registro.id}">Editar</button></td>
+      <td><button type="button" class="btn-acao excluir" data-excluir="${chave}" data-id="${registro.id}">Excluir</button></td>
+      ${config.temAtivo ? `<td>${registro.ativo === false ? '<span class="badge-inativo">Inativo</span>' : '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">Ativo</span>'}</td>` : ''}
+    </tr>
+  `).join('');
+
+  corpo.querySelectorAll('[data-editar]').forEach(botao => {
+    botao.addEventListener('click', () => abrirModal(botao.dataset.editar, botao.dataset.id));
+  });
+  corpo.querySelectorAll('[data-excluir]').forEach(botao => {
+    botao.addEventListener('click', () => confirmarExclusao(botao.dataset.excluir, botao.dataset.id));
+  });
+}
+
 // --------------------------------------------------------
 // Busca (client-side, dataset pequeno o suficiente pra isso)
 // --------------------------------------------------------
@@ -174,16 +217,18 @@ function abrirModal(chave, id){
   const registro = id ? dadosCarregados[chave].find(r => String(r.id) === String(id)) : null;
   modoModal = { modo: 'cadastro', chave, id };
 
-  modalTitulo.textContent = (registro ? 'Editar ' : 'Novo ') + NOMES_MODULO[chave].slice(0, -1);
+  modalTitulo.textContent = (registro ? 'Editar ' : 'Novo ') + config.nomeSingular;
 
+  // modalSemLabel (hoje só Fornecedores): pill com o nome do campo como
+  // placeholder, sem rótulo acima — igual ao padrão de Compras/Fichas/Produção
   modalCampos.innerHTML = config.campos.map(campo => `
-    <div class="form-grupo">
-      <label for="campo_${campo.chave}">${campo.label}${campo.obrigatorio ? ' *' : ''}</label>
+    <div class="form-grupo${config.modalSemLabel ? ' form-grupo-pill' : ''}">
+      ${config.modalSemLabel ? '' : `<label for="campo_${campo.chave}">${campo.label}${campo.obrigatorio ? ' *' : ''}</label>`}
       <input
         id="campo_${campo.chave}"
         type="${campo.tipo}"
         ${campo.passo ? `step="${campo.passo}"` : ''}
-        placeholder="${campo.placeholder || ''}"
+        placeholder="${config.modalSemLabel ? campo.label + (campo.obrigatorio ? ' *' : '') : (campo.placeholder || '')}"
         ${campo.obrigatorio ? 'required' : ''}
         value="${registro && registro[campo.chave] != null ? registro[campo.chave] : ''}"
       >

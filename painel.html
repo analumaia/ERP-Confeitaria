@@ -366,10 +366,25 @@
   <section class="conteudo-modulo" data-modulo="fornecedores">
     <div class="barra-modulo">
       <h2>Fornecedores</h2>
-      <input type="search" class="campo-busca" placeholder="Buscar fornecedor..." data-busca="fornecedores">
+      <input type="search" class="campo-busca" placeholder="Fornecedor (pesquisa)" data-busca="fornecedores">
       <button class="btn-novo" data-novo="fornecedores">+ Novo fornecedor</button>
     </div>
-    <div class="lista-cards" data-lista="fornecedores"></div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome do fornecedor</th>
+              <th>Contato</th>
+              <th>Prazo</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody data-tabela-corpo="fornecedores"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- CLIENTES -->

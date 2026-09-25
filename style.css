@@ -1240,6 +1240,20 @@ h1, h2, h3, .fonte-titulo{
 }
 
 /* ---------------------------------------------------------
+   CADASTROS EM TABELA (relatório) — hoje usado por Fornecedores;
+   generalizável a outros módulos via MODULOS[chave].visualizacao
+--------------------------------------------------------- */
+.relatorio-cadastro{ padding: 0; overflow: hidden; }
+.tabela-cadastro{ min-width: 640px; }
+.tabela-cadastro .celula-principal{ font-weight: 700; }
+.tabela-cadastro td .btn-acao{ padding: 6px 14px; font-size: 0.8rem; }
+
+.form-grupo-pill input{
+  border-radius: 999px;
+  padding: 12px 18px;
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

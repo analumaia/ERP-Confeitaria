@@ -164,13 +164,35 @@
 
   <!-- PRODUÇÃO -->
   <section class="conteudo-modulo" data-modulo="producao">
-    <div class="barra-modulo">
-      <h2>Produção</h2>
-      <button class="btn-novo" id="btnNovaProducao">+ Nova produção</button>
-    </div>
+    <div class="barra-modulo"><h2>Produção</h2></div>
 
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Histórico de produções</h3>
-    <div class="lista-cards" id="listaProducoes"></div>
+    <form class="cartao-item cartao-nova-compra cartao-producao" id="formProducao" novalidate>
+      <div class="compra-corpo">
+        <h3 class="compra-titulo">Nova produção</h3>
+        <div class="producao-linha-topo">
+          <select id="campoItemProducao" aria-label="Ficha técnica ou produto">
+            <option value="">Selecione...</option>
+          </select>
+          <input type="number" id="campoQuantidadeProducao" step="0.0001" min="0.0001" placeholder="Qtda." title="Até 4 casas decimais" aria-label="Quantidade produzida">
+          <input type="date" id="campoDataProducao" aria-label="Data da produção">
+        </div>
+        <div class="form-grupo" style="margin-top:14px;">
+          <textarea id="campoObservacaoProducao" rows="3" placeholder="Observação (opcional)" class="textarea-producao"></textarea>
+        </div>
+      </div>
+      <div class="compra-acoes">
+        <button type="button" class="compra-btn-cancelar" id="btnCancelarProducao">Cancelar</button>
+        <button type="submit" class="compra-btn-salvar" id="btnSalvarProducao">Salvar</button>
+      </div>
+    </form>
+
+    <div class="cartao-item" style="margin-top:20px;">
+      <div class="titulo-item"><span>Estoque das fichas técnicas</span></div>
+      <div class="estoque-fichas-tiras" id="estoqueFichasProducao"></div>
+
+      <div class="titulo-item" style="margin-top:18px;"><span>Histórico de produções</span></div>
+      <div class="lista-cards" id="listaProducoes"></div>
+    </div>
   </section>
 
   <!-- FICHAS TÉCNICAS -->

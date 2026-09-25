@@ -1193,6 +1193,53 @@ h1, h2, h3, .fonte-titulo{
 }
 
 /* ---------------------------------------------------------
+   PRODUÇÃO (formulário fixo, uma coluna) + estoque de fichas
+--------------------------------------------------------- */
+.cartao-producao{ min-height: 0; }
+
+.producao-linha-topo{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 170px;
+  gap: 10px;
+}
+.producao-linha-topo select,
+.producao-linha-topo input{
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--marrom-claro);
+  background: var(--branco);
+  color: var(--marrom-escuro);
+  font-size: 0.9rem;
+}
+.producao-linha-topo select:focus,
+.producao-linha-topo input:focus{ border-color: var(--rosa); }
+
+.textarea-producao{
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--marrom-claro);
+  background: var(--branco);
+  color: var(--marrom-escuro);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+.textarea-producao:focus{ border-color: var(--rosa); }
+
+.estoque-fichas-tiras{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 700px){
+  .producao-linha-topo{ grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

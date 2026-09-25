@@ -18,16 +18,6 @@ modalForm.addEventListener('submit', async (evento) => {
     return;
   }
 
-  if (modoModal.modo === 'ficha_tecnica'){
-    await salvarFichaTecnica();
-    return;
-  }
-
-  if (modoModal.modo === 'producao'){
-    await salvarNovaProducao();
-    return;
-  }
-
   if (modoModal.modo === 'lancamento'){
     await salvarNovoLancamento();
     return;

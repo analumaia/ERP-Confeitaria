@@ -124,6 +124,8 @@ function trocarAba(chave){
     carregarProducao();
   } else if (chave === 'fichas'){
     carregarFichas();
+  } else if (chave === 'produtos'){
+    carregarProdutosTabela(); // fora de MODULOS — tela própria (tabela + composição)
   } else if (chave === 'vendas'){
     carregarVendas();
   } else if (chave === 'financeiro'){

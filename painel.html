@@ -317,10 +317,27 @@
   <section class="conteudo-modulo" data-modulo="produtos">
     <div class="barra-modulo">
       <h2>Produtos</h2>
-      <input type="search" class="campo-busca" placeholder="Buscar produto..." data-busca="produtos">
-      <button class="btn-novo" data-novo="produtos">+ Novo produto</button>
+      <input type="search" class="campo-busca" placeholder="Produto (pesquisa)" id="campoBuscaProduto">
+      <button class="btn-novo" id="btnNovoProduto">+ Novo produto</button>
     </div>
-    <div class="lista-cards" data-lista="produtos"></div>
+    <div class="cartao-item relatorio-produtos">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-produtos">
+          <thead>
+            <tr>
+              <th>Nome do produto</th>
+              <th>Categoria</th>
+              <th>Preço</th>
+              <th>Custo un.</th>
+              <th>Estoque mínimo</th>
+              <th>Ações</th>
+              <th>Situação</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaProdutos"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- FORNECEDORES -->
@@ -379,6 +396,65 @@
   </div>
 </div>
 
+<!-- MODAL de Produto (próprio: SKU, valor, estoque mín./máx., ativo e composição) -->
+<div class="modal-overlay" id="modalProdutoOverlay">
+  <div class="modal">
+    <h3 id="tituloModalProduto">Novo produto</h3>
+    <form id="formProduto">
+      <div class="form-grupo">
+        <label for="campoNomeProduto">Nome</label>
+        <input type="text" id="campoNomeProduto" required>
+      </div>
+
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoSkuProduto">SKU (opcional)</label>
+          <input type="text" id="campoSkuProduto">
+        </div>
+        <div class="form-grupo">
+          <label for="campoValorProduto">Valor de venda (R$)</label>
+          <input type="number" id="campoValorProduto" step="0.01" min="0.01" required>
+        </div>
+      </div>
+
+      <div class="form-grupo">
+        <label for="campoCategoriaProduto">Categoria</label>
+        <input type="text" id="campoCategoriaProduto" placeholder="Tradicionais, Cookie Pies...">
+      </div>
+
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoEstoqueMinimoProduto">Estoque mínimo</label>
+          <input type="number" id="campoEstoqueMinimoProduto" step="0.01" min="0">
+        </div>
+        <div class="form-grupo">
+          <label for="campoEstoqueMaximoProduto">Estoque máximo (opcional)</label>
+          <input type="number" id="campoEstoqueMaximoProduto" step="0.01" min="0">
+        </div>
+      </div>
+
+      <label class="form-checkbox">
+        <input type="checkbox" id="campoAtivoProduto" checked>
+        Ativo
+      </label>
+
+      <div class="compra-secao-titulo">Composição</div>
+      <p class="item-sub" style="margin:-4px 0 10px;">O que 1 unidade deste produto consome — fichas técnicas e/ou insumos direto.</p>
+      <div id="itensComposicaoProduto"></div>
+      <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemComposicaoProduto">+ Adicionar item</button>
+
+      <div class="compra-rodape-frete" style="margin:16px -24px -26px; padding:14px 24px;">
+        <div class="compra-frete-linha"><span>Custo unitário de produto:</span><span id="custoUnitarioProdutoModal">—</span></div>
+      </div>
+
+      <div class="acoes-modal" style="margin-top:32px;">
+        <button type="button" class="btn-secundario" id="btnCancelarProduto">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarProduto">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -390,6 +466,7 @@
 <script src="estoque.js"></script>
 <script src="compras.js"></script>
 <script src="fichas.js"></script>
+<script src="produtos.js"></script>
 <script src="producao.js"></script>
 <script src="vendas.js"></script>
 <script src="financeiro.js"></script>

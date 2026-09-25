@@ -1174,6 +1174,25 @@ h1, h2, h3, .fonte-titulo{
 }
 
 /* ---------------------------------------------------------
+   PRODUTOS (relatório em tabela + modal com composição)
+--------------------------------------------------------- */
+.relatorio-produtos{ padding: 0; overflow: hidden; }
+.tabela-produtos{ min-width: 760px; }
+.tabela-produtos .celula-principal{ display: flex; flex-direction: column; gap: 2px; font-weight: 700; }
+.tabela-produtos .item-sub{ font-weight: 500; }
+.tabela-acoes-empilhadas{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 100px;
+}
+.tabela-acoes-empilhadas .btn-acao{ padding: 6px 10px; font-size: 0.78rem; }
+
+@media (max-width: 700px){
+  .tabela-acoes-empilhadas{ flex-direction: row; }
+}
+
+/* ---------------------------------------------------------
    RESPONSIVO
 --------------------------------------------------------- */
 @media (max-width: 600px){

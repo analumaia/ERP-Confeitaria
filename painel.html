@@ -184,26 +184,29 @@
         <div class="compra-corpo">
           <h3 class="compra-titulo" id="tituloFormFicha">Nova ficha técnica</h3>
 
-          <div class="form-linha-dupla">
-            <div class="form-grupo">
-              <label for="campoNomeFicha">Nome</label>
-              <input type="text" id="campoNomeFicha" placeholder="Massa de baunilha, recheio de brigadeiro...">
-            </div>
-            <div class="form-grupo" style="display:flex; gap:8px;">
-              <div style="flex:1;">
-                <label for="campoRendimentoFicha">Rendimento</label>
-                <input type="number" id="campoRendimentoFicha" step="0.0001" min="0.0001" placeholder="Ex.: 2000" title="Até 4 casas decimais">
-              </div>
-              <div style="width:90px;">
-                <label for="campoUnidadeFicha">Unidade</label>
-                <input type="text" id="campoUnidadeFicha" placeholder="g, ml, un">
-              </div>
-            </div>
+          <div class="form-grupo">
+            <label for="campoNomeFicha">Nome</label>
+            <input type="text" id="campoNomeFicha" placeholder="Massa de baunilha, recheio de brigadeiro...">
           </div>
 
           <div class="compra-secao-titulo">Item</div>
           <div id="itensFicha"></div>
           <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemFicha">+ Adicionar insumo</button>
+
+          <div class="compra-secao-titulo" style="margin-top:20px;">Rendimento</div>
+          <div class="form-grupo" style="display:flex; gap:8px;">
+            <div style="flex:1;">
+              <input type="number" id="campoRendimentoFicha" step="0.0001" min="0.0001" placeholder="Valor" title="Até 4 casas decimais" aria-label="Valor do rendimento">
+            </div>
+            <div style="width:110px;">
+              <input type="text" id="campoUnidadeFicha" placeholder="Medida" aria-label="Unidade de medida">
+            </div>
+          </div>
+        </div>
+
+        <div class="compra-rodape-frete">
+          <div class="compra-frete-linha"><span>Valor do lote:</span><span id="valorLoteFicha">—</span></div>
+          <div class="compra-frete-linha"><span>Valor por unidade:</span><span id="valorUnidadeFicha">—</span></div>
         </div>
 
         <div class="compra-acoes">

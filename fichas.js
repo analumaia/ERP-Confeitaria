@@ -24,7 +24,26 @@ const itensFicha = document.getElementById('itensFicha');
 const btnSalvarFicha = document.getElementById('btnSalvarFicha');
 
 const numeroFicha = v => Number(v).toLocaleString('pt-BR');
+const moedaFicha = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 6 });
 const temMaisDeQuatroCasasFicha = n => Math.abs(n * 10000 - Math.round(n * 10000)) > 1e-6;
+
+// Custo estimado da receita: soma dos insumos (pelo custo unitário cadastrado)
+// dividida pelo rendimento. Puramente informativo — não é salvo no banco.
+function recalcularCustoFicha(){
+  const custoPorInsumo = {};
+  insumosFicha.forEach(i => { custoPorInsumo[i.id] = Number(i.custo_unitario) || 0; });
+
+  let valorLote = 0;
+  itensFicha.querySelectorAll('.ficha-linha-item').forEach(linha => {
+    const insumoId = linha.querySelector('.ficha-insumo').value;
+    const quantidade = Number(linha.querySelector('.ficha-quantidade').value) || 0;
+    if (insumoId) valorLote += quantidade * (custoPorInsumo[insumoId] || 0);
+  });
+
+  const rendimento = Number(campoRendimentoFicha.value) || 0;
+  document.getElementById('valorLoteFicha').textContent = moedaFicha(valorLote);
+  document.getElementById('valorUnidadeFicha').textContent = rendimento > 0 ? moedaFicha(valorLote / rendimento) + ` / ${campoUnidadeFicha.value || 'un'}` : '—';
+}
 
 // --------------------------------------------------------
 // Carregar
@@ -51,6 +70,7 @@ async function carregarFichas(){
   insumosFicha = respInsumos.data || [];
 
   atualizarOpcoesFormularioFicha();
+  recalcularCustoFicha();
   renderizarFichas();
 }
 
@@ -134,6 +154,7 @@ function resetarFormularioFicha(){
   campoUnidadeFicha.value = 'g';
   itensFicha.innerHTML = '';
   adicionarLinhaItemFicha(null, null);
+  recalcularCustoFicha();
 }
 
 function editarFicha(id){
@@ -148,6 +169,7 @@ function editarFicha(id){
   itensFicha.innerHTML = '';
   (ficha.receita_itens || []).forEach(item => adicionarLinhaItemFicha(item.insumo_id, item.quantidade));
   if (itensFicha.children.length === 0) adicionarLinhaItemFicha(null, null);
+  recalcularCustoFicha();
   formFicha.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -170,13 +192,18 @@ function lerItensFicha(){
   return { itens, incompleto, casasDemais };
 }
 
-document.getElementById('btnAdicionarItemFicha').addEventListener('click', () => adicionarLinhaItemFicha(null, null));
+document.getElementById('btnAdicionarItemFicha').addEventListener('click', () => { adicionarLinhaItemFicha(null, null); recalcularCustoFicha(); });
 itensFicha.addEventListener('click', (evento) => {
   if (evento.target.classList.contains('remover-item-ficha')){
     evento.target.closest('.ficha-linha-item').remove();
     if (itensFicha.children.length === 0) adicionarLinhaItemFicha(null, null);
+    recalcularCustoFicha();
   }
 });
+itensFicha.addEventListener('input', recalcularCustoFicha);
+itensFicha.addEventListener('change', recalcularCustoFicha);
+campoRendimentoFicha.addEventListener('input', recalcularCustoFicha);
+campoUnidadeFicha.addEventListener('input', recalcularCustoFicha);
 document.getElementById('btnCancelarFicha').addEventListener('click', resetarFormularioFicha);
 formFicha.addEventListener('submit', (evento) => {
   evento.preventDefault();

@@ -36,8 +36,8 @@ const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'C
 // --------------------------------------------------------
 // cache em memória dos dados carregados de cada cadastro, pra busca local
 const dadosCarregados = {};
-// cache separado dos dados de estoque (join com insumos/produtos, incluindo inativos)
-const dadosEstoque = { insumos: [], produtos: [] };
+// cache separado dos dados de estoque (join com insumos/produtos/fichas, incluindo inativos)
+const dadosEstoque = { insumos: [], produtos: [], fichas: [] };
 let moduloAtivo = 'dashboard';
 // diz qual módulo é dono do que está aberto no modal no momento, e com
 // que dados — cada módulo lê/escreve isso ao abrir e salvar seu modal

@@ -7,18 +7,20 @@
 let itemEstoqueAtual = null; // { tipoItem, itemId, nome, saldoAtual, unidade } do item em exibição no momento
 
 async function carregarEstoque(){
-  const [respInsumos, respProdutos] = await Promise.all([
+  const [respInsumos, respProdutos, respFichas] = await Promise.all([
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').order('nome'),
     supabaseClient.from('produtos').select('*, estoque_produtos(saldo_atual)').order('nome'),
+    supabaseClient.from('receitas').select('*, estoque_fichas(saldo_atual)').order('nome'),
   ]);
 
-  if (respInsumos.error || respProdutos.error){
+  if (respInsumos.error || respProdutos.error || respFichas.error){
     mostrarToast('Erro ao carregar o estoque.', 'erro');
     return;
   }
 
   dadosEstoque.insumos = respInsumos.data;
   dadosEstoque.produtos = respProdutos.data;
+  dadosEstoque.fichas = respFichas.data;
 
   popularBuscaItemEstoque();
 
@@ -28,7 +30,9 @@ async function carregarEstoque(){
 }
 
 function saldoDoItem(tipoItem, item){
-  const relacao = tipoItem === 'insumo' ? item.estoque_insumos : item.estoque_produtos;
+  const relacao = tipoItem === 'insumo' ? item.estoque_insumos
+    : tipoItem === 'produto' ? item.estoque_produtos
+    : item.estoque_fichas;
   // O Supabase pode devolver essa relação como objeto único (1-pra-1) ou
   // como lista de 1 item, dependendo da versão/detecção da FK — tratamos os dois casos.
   const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
@@ -63,6 +67,7 @@ function popularBuscaItemEstoque(){
   opcoesEstoque = [
     ...montar(dadosEstoque.insumos, 'insumo', 'Insumos'),
     ...montar(dadosEstoque.produtos, 'produto', 'Produtos'),
+    ...montar(dadosEstoque.fichas, 'ficha', 'Fichas técnicas'),
   ];
   if (!comboLista.hidden) renderizarListaCombo();
 }
@@ -239,7 +244,7 @@ function mostrarEstadoSemItem(){
   botoesAcaoEstoque.forEach(botao => { botao.disabled = true; });
   ['saldoItemEstoque', 'totalEntradasEstoque', 'totalSaidasEstoque'].forEach(id => { document.getElementById(id).textContent = '—'; });
   ['minimoItemEstoque', 'subEntradasEstoque', 'subSaidasEstoque', 'notaExtratoEstoque'].forEach(id => { document.getElementById(id).textContent = ''; });
-  document.getElementById('tabelaItemEstoque').innerHTML = '<div class="lista-vazia">Escolha um insumo ou produto acima pra ver o saldo, os totais do período e o extrato de movimentações.</div>';
+  document.getElementById('tabelaItemEstoque').innerHTML = '<div class="lista-vazia">Escolha um insumo, produto ou ficha técnica acima pra ver o saldo, os totais do período e o extrato de movimentações.</div>';
 }
 
 async function buscarItemEstoque(valor){
@@ -249,7 +254,9 @@ async function buscarItemEstoque(valor){
   }
 
   const [tipoItem, itemId] = valor.split(':');
-  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos : dadosEstoque.produtos;
+  const lista = tipoItem === 'insumo' ? dadosEstoque.insumos
+    : tipoItem === 'produto' ? dadosEstoque.produtos
+    : dadosEstoque.fichas;
   const item = lista.find(r => String(r.id) === String(itemId));
   if (!item){
     mostrarEstadoSemItem();
@@ -257,7 +264,7 @@ async function buscarItemEstoque(valor){
   }
 
   const saldoAtual = saldoDoItem(tipoItem, item);
-  const unidade = tipoItem === 'insumo' ? item.unidade_medida : 'un';
+  const unidade = tipoItem === 'insumo' ? item.unidade_medida : tipoItem === 'ficha' ? item.rendimento_unidade : 'un';
   const abaixoDoMinimo = item.estoque_minimo != null && saldoAtual < Number(item.estoque_minimo);
   itemEstoqueAtual = { tipoItem, itemId, nome: item.nome, saldoAtual, unidade };
   valorItemSelecionado = valor;
@@ -289,11 +296,9 @@ async function carregarExtratoItem(){
   elEntradas.textContent = '…';
   elSaidas.textContent = '…';
 
-  let consulta = supabaseClient
-    .from('movimentacoes_estoque')
-    .select('*')
-    .eq('tipo_item', tipoItem)
-    .eq('item_id', itemId);
+  let consulta = tipoItem === 'ficha'
+    ? supabaseClient.from('movimentacoes_fichas').select('*').eq('ficha_id', itemId)
+    : supabaseClient.from('movimentacoes_estoque').select('*').eq('tipo_item', tipoItem).eq('item_id', itemId);
   if (campoPeriodoDe.value){
     consulta = consulta.gte('criado_em', new Date(campoPeriodoDe.value + 'T00:00:00').toISOString());
   }
@@ -383,14 +388,22 @@ async function salvarMovimento(){
   btnSalvar.disabled = true;
   btnSalvar.textContent = 'Salvando...';
 
-  const { error } = await supabaseClient.from('movimentacoes_estoque').insert({
-    tipo_item: tipoItem,
-    item_id: itemId,
-    tipo_movimento: tipoMovimento,
-    quantidade,
-    origem: 'ajuste_manual',
-    observacao,
-  });
+  const { error } = tipoItem === 'ficha'
+    ? await supabaseClient.from('movimentacoes_fichas').insert({
+        ficha_id: itemId,
+        tipo_movimento: tipoMovimento,
+        quantidade,
+        origem: 'ajuste_manual',
+        observacao,
+      })
+    : await supabaseClient.from('movimentacoes_estoque').insert({
+        tipo_item: tipoItem,
+        item_id: itemId,
+        tipo_movimento: tipoMovimento,
+        quantidade,
+        origem: 'ajuste_manual',
+        observacao,
+      });
 
   btnSalvar.disabled = false;
   btnSalvar.textContent = 'Salvar';
@@ -439,14 +452,26 @@ async function salvarBalancoItem(){
   btnSalvar.disabled = true;
   btnSalvar.textContent = 'Salvando...';
 
-  const { error } = await supabaseClient.from('movimentacoes_estoque').insert({
-    tipo_item: tipoItem,
-    item_id: itemId,
-    tipo_movimento: diferenca > 0 ? 'entrada' : 'saida',
-    quantidade: Math.abs(diferenca),
-    origem: 'balanco',
-    observacao: `Ajuste de balanço: sistema tinha ${saldoAtual}, contagem física = ${contagem}`,
-  });
+  const tipoMovimentoBalanco = diferenca > 0 ? 'entrada' : 'saida';
+  const quantidadeBalanco = Math.abs(diferenca);
+  const observacaoBalanco = `Ajuste de balanço: sistema tinha ${saldoAtual}, contagem física = ${contagem}`;
+
+  const { error } = tipoItem === 'ficha'
+    ? await supabaseClient.from('movimentacoes_fichas').insert({
+        ficha_id: itemId,
+        tipo_movimento: tipoMovimentoBalanco,
+        quantidade: quantidadeBalanco,
+        origem: 'balanco',
+        observacao: observacaoBalanco,
+      })
+    : await supabaseClient.from('movimentacoes_estoque').insert({
+        tipo_item: tipoItem,
+        item_id: itemId,
+        tipo_movimento: tipoMovimentoBalanco,
+        quantidade: quantidadeBalanco,
+        origem: 'balanco',
+        observacao: observacaoBalanco,
+      });
 
   btnSalvar.disabled = false;
   btnSalvar.textContent = 'Salvar';

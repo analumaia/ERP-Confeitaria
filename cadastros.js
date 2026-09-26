@@ -1,35 +1,16 @@
 /* ============================================================
-   CADASTROS — CRUD genérico dos cadastros simples (insumos,
-   fornecedores, clientes). Cada um é descrito uma vez em
-   MODULOS, e as mesmas funções renderizam a lista, o formulário
-   e fazem as chamadas ao Supabase.
+   CADASTROS — CRUD genérico dos cadastros simples (fornecedores,
+   clientes). Cada um é descrito uma vez em MODULOS, e as mesmas
+   funções renderizam a lista, o formulário e fazem as chamadas
+   ao Supabase.
 
-   Produtos NÃO está aqui: por ter tabela em vez de cards, campos
-   próprios (SKU, estoque máximo) e a composição (fichas técnicas
-   + insumos), ele ganhou sua própria tela — ver produtos.js.
+   Produtos e Insumos NÃO estão aqui: por terem tabela em vez de
+   cards e precisarem de dados de outras tabelas (composição,
+   fichas técnicas relacionadas), ganharam suas próprias telas —
+   ver produtos.js e insumos.js.
    ============================================================ */
 
 const MODULOS = {
-  insumos: {
-    tabela: 'insumos',
-    icone: '🌾',
-    tituloCampo: 'nome',
-    nomeSingular: 'insumo',
-    temAtivo: true,
-    campos: [
-      { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
-      { chave: 'categoria', label: 'Categoria', tipo: 'text', placeholder: 'Embalagens, matéria-prima, descartáveis...' },
-      { chave: 'unidade_medida', label: 'Unidade de medida', tipo: 'text', obrigatorio: true, placeholder: 'kg, un, litro...' },
-      { chave: 'custo_unitario', label: 'Custo unitário (R$)', tipo: 'number', passo: '0.0001', placeholder: 'Até 4 casas decimais, ex.: 0,0075' },
-      { chave: 'estoque_minimo', label: 'Estoque mínimo', tipo: 'number', passo: '0.01' },
-    ],
-    infoCampos: [
-      { chave: 'categoria', label: 'Categoria' },
-      { chave: 'unidade_medida', label: 'Unidade' },
-      { chave: 'custo_unitario', label: 'Custo unit.', formato: 'moeda' },
-      { chave: 'estoque_minimo', label: 'Estoque mín.' },
-    ],
-  },
   fornecedores: {
     tabela: 'fornecedores',
     icone: '📦',
@@ -71,7 +52,7 @@ const MODULOS = {
 };
 
 const NOMES_MODULO = {
-  insumos: 'insumos', fornecedores: 'fornecedores', clientes: 'clientes',
+  fornecedores: 'fornecedores', clientes: 'clientes',
 };
 
 // --------------------------------------------------------

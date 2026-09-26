@@ -329,10 +329,27 @@
   <section class="conteudo-modulo" data-modulo="insumos">
     <div class="barra-modulo">
       <h2>Insumos</h2>
-      <input type="search" class="campo-busca" placeholder="Buscar insumo..." data-busca="insumos">
-      <button class="btn-novo" data-novo="insumos">+ Novo insumo</button>
+      <input type="search" class="campo-busca" placeholder="Insumo (pesquisa)" id="campoBuscaInsumo">
+      <button class="btn-novo" id="btnNovoInsumo">+ Novo insumo</button>
     </div>
-    <div class="lista-cards" data-lista="insumos"></div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome do insumo</th>
+              <th>Fichas técnicas/produtos relacionados</th>
+              <th>Unidade de medida</th>
+              <th>Custo unitário</th>
+              <th>Estoque mínimo</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaInsumos"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- PRODUTOS -->
@@ -492,6 +509,31 @@
   </div>
 </div>
 
+<!-- MODAL de Insumo (próprio: nome, unidade, custo, estoque mínimo — pill sem rótulo, igual Fornecedores) -->
+<div class="modal-overlay" id="modalInsumoOverlay">
+  <div class="modal">
+    <h3 id="tituloModalInsumo">Novo insumo</h3>
+    <form id="formInsumo">
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoNomeInsumo" placeholder="Nome do insumo *" required>
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoUnidadeInsumo" placeholder="Unidade de medida * (kg, un, litro...)" required>
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoCustoInsumo" step="0.0001" min="0" placeholder="Custo unitário (R$) — até 4 casas decimais">
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoEstoqueMinimoInsumo" step="0.01" min="0" placeholder="Estoque mínimo">
+      </div>
+      <div class="acoes-modal">
+        <button type="button" class="btn-secundario" id="btnCancelarInsumo">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarInsumo">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -504,6 +546,7 @@
 <script src="compras.js"></script>
 <script src="fichas.js"></script>
 <script src="produtos.js"></script>
+<script src="insumos.js"></script>
 <script src="producao.js"></script>
 <script src="vendas.js"></script>
 <script src="financeiro.js"></script>

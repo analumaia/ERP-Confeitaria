@@ -18,26 +18,26 @@ const supabaseClient = window.supabase.createClient(
 // --------------------------------------------------------
 // Abas do painel
 // --------------------------------------------------------
-const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'fichas', 'vendas', 'financeiro', 'insumos', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
+const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'fichas', 'vendas', 'financeiro', 'insumos', 'embalagens', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
 
 // Estrutura do menu lateral: grupos com sub-itens (cada item, inclusive o grupo, abre uma tela)
 const MENU_LATERAL = [
   { chave: 'dashboard' },
   { chave: 'vendas', filhos: ['clientes', 'produtos'] },
-  { chave: 'estoque', filhos: ['producao', 'fichas', 'compras', 'insumos', 'fornecedores'] },
+  { chave: 'estoque', filhos: ['producao', 'fichas', 'compras', 'insumos', 'embalagens', 'fornecedores'] },
   { chave: 'financeiro' },
   { chave: 'configuracoes' },
 ];
-const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', fichas: '📋', vendas: '💰', financeiro: '💵', insumos: '🌾', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
-const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', fichas: 'Fichas técnicas', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
+const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', fichas: '📋', vendas: '💰', financeiro: '💵', insumos: '🌾', embalagens: '🎁', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
+const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', fichas: 'Fichas técnicas', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', embalagens: 'Embalagens', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
 
 // --------------------------------------------------------
 // Estado compartilhado entre módulos
 // --------------------------------------------------------
 // cache em memória dos dados carregados de cada cadastro, pra busca local
 const dadosCarregados = {};
-// cache separado dos dados de estoque (join com insumos/produtos/fichas, incluindo inativos)
-const dadosEstoque = { insumos: [], produtos: [], fichas: [] };
+// cache separado dos dados de estoque (join com insumos/produtos/fichas/embalagens, incluindo inativos)
+const dadosEstoque = { insumos: [], produtos: [], fichas: [], embalagens: [] };
 let moduloAtivo = 'dashboard';
 // diz qual módulo é dono do que está aberto no modal no momento, e com
 // que dados — cada módulo lê/escreve isso ao abrir e salvar seu modal
@@ -128,6 +128,8 @@ function trocarAba(chave){
     carregarProdutosTabela(); // fora de MODULOS — tela própria (tabela + composição)
   } else if (chave === 'insumos'){
     carregarInsumosTabela(); // fora de MODULOS — tela própria (tabela + relacionados)
+  } else if (chave === 'embalagens'){
+    carregarEmbalagensTabela(); // fora de MODULOS — tela própria (tabela)
   } else if (chave === 'vendas'){
     carregarVendas();
   } else if (chave === 'financeiro'){

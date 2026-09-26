@@ -1,8 +1,10 @@
 /* ============================================================
    COMPRAS — à esquerda, o formulário fixo "Nova compra" (sem modal);
    à direita, o relatório das compras com filtro de período.
+   Cada linha do pedido é um insumo OU uma embalagem (nunca os
+   dois) — o combo tem os dois grupos, ver opcoesItemCompraHtml.
    Ao marcar uma compra como recebida, o trigger no banco credita o
-   estoque e atualiza o custo do insumo automaticamente.
+   estoque e atualiza o custo do insumo/embalagem automaticamente.
 
    Frete: usa a coluna compras.valor_frete (ver SQL de migração).
    Depende de dataLocalISO (estoque.js, carregado antes deste).
@@ -10,6 +12,7 @@
 
 let fornecedoresCompra = [];
 let insumosAtivosCompra = [];
+let embalagensCompra = [];
 
 const formNovaCompra = document.getElementById('formNovaCompra');
 const campoFornecedorCompra = document.getElementById('campoFornecedorCompra');
@@ -46,14 +49,15 @@ async function carregarCompras(){
   const lista = document.getElementById('listaCompras');
   if (!dadosCarregados.compras) lista.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
-  const [respCompras, respFornecedores, respInsumos] = await Promise.all([
+  const [respCompras, respFornecedores, respInsumos, respEmbalagens] = await Promise.all([
     supabaseClient
       .from('compras')
-      .select('*, fornecedores(nome), compra_itens(quantidade, custo_unitario, insumos(nome, unidade_medida))')
+      .select('*, fornecedores(nome), compra_itens(quantidade, custo_unitario, insumos(nome, unidade_medida), embalagens(nome))')
       .order('data_compra', { ascending: false })
       .order('criado_em', { ascending: false }),
     supabaseClient.from('fornecedores').select('*').order('nome'),
     supabaseClient.from('insumos').select('*').eq('ativo', true).order('nome'),
+    supabaseClient.from('embalagens').select('*').order('nome'),
   ]);
 
   if (respCompras.error){
@@ -64,6 +68,7 @@ async function carregarCompras(){
 
   fornecedoresCompra = respFornecedores.data || [];
   insumosAtivosCompra = respInsumos.data || [];
+  embalagensCompra = respEmbalagens.data || [];
   dadosCarregados.compras = respCompras.data;
 
   atualizarOpcoesFormularioCompra();
@@ -73,15 +78,20 @@ async function carregarCompras(){
 // --------------------------------------------------------
 // Formulário "Nova compra"
 // --------------------------------------------------------
-function opcoesInsumoHtml(){
-  return '<option value="">Selecione o insumo...</option>' +
-    insumosAtivosCompra.map(i => `<option value="${i.id}">${i.nome} (${i.unidade_medida})</option>`).join('');
+// O <select> de cada linha guarda "insumo:<id>" ou "embalagem:<id>" —
+// o mesmo padrão usado no combo de Produção (ficha/produto).
+function opcoesItemCompraHtml(){
+  const grupoInsumos = insumosAtivosCompra.map(i => `<option value="insumo:${i.id}">${i.nome} (${i.unidade_medida})</option>`).join('');
+  const grupoEmbalagens = embalagensCompra.map(e => `<option value="embalagem:${e.id}">${e.nome}${e.dimensoes ? ' — ' + e.dimensoes : ''}</option>`).join('');
+  return '<option value="">Selecione o item...</option>' +
+    (grupoInsumos ? `<optgroup label="Insumos">${grupoInsumos}</optgroup>` : '') +
+    (grupoEmbalagens ? `<optgroup label="Embalagens">${grupoEmbalagens}</optgroup>` : '');
 }
 
 function adicionarLinhaItemCompra(){
   itensCompra.insertAdjacentHTML('beforeend', `
     <div class="compra-linha-item">
-      <select class="item-insumo" aria-label="Insumo">${opcoesInsumoHtml()}</select>
+      <select class="item-insumo" aria-label="Insumo ou embalagem">${opcoesItemCompraHtml()}</select>
       <input type="number" class="item-quantidade" step="0.001" min="0.001" placeholder="Qtda" aria-label="Quantidade">
       <input type="number" class="item-custo" step="0.0001" min="0" placeholder="Cust. un." title="Até 4 casas decimais" aria-label="Custo unitário">
       <button type="button" class="remover-item-compra" aria-label="Remover item">×</button>
@@ -96,7 +106,7 @@ function atualizarOpcoesFormularioCompra(){
     fornecedoresCompra.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
   campoFornecedorCompra.value = fornecedorEscolhido;
 
-  const opcoes = opcoesInsumoHtml();
+  const opcoes = opcoesItemCompraHtml();
   itensCompra.querySelectorAll('.item-insumo').forEach(select => {
     const escolhido = select.value;
     select.innerHTML = opcoes;
@@ -144,16 +154,20 @@ function lerItensCompra(){
   let incompleto = false;
   let casasDemais = false;
   itensCompra.querySelectorAll('.compra-linha-item').forEach(linha => {
-    const insumoId = linha.querySelector('.item-insumo').value;
+    const valorSelecionado = linha.querySelector('.item-insumo').value; // "insumo:<id>" ou "embalagem:<id>"
     const quantidade = Number(linha.querySelector('.item-quantidade').value);
     const custoUnitario = Number(linha.querySelector('.item-custo').value);
-    if (!insumoId && !(quantidade > 0) && !(custoUnitario > 0)) return;
-    if (!insumoId || !(quantidade > 0)){
+    if (!valorSelecionado && !(quantidade > 0) && !(custoUnitario > 0)) return;
+    if (!valorSelecionado || !(quantidade > 0)){
       incompleto = true;
       return;
     }
     if (temMaisDeQuatroCasas(custoUnitario)) casasDemais = true;
-    itens.push({ insumo_id: insumoId, quantidade, custo_unitario: custoUnitario || 0 });
+
+    const [tipo, id] = valorSelecionado.split(':');
+    const item = { quantidade, custo_unitario: custoUnitario || 0 };
+    if (tipo === 'embalagem') item.embalagem_id = id; else item.insumo_id = id;
+    itens.push(item);
   });
   return { itens, incompleto, casasDemais };
 }
@@ -188,7 +202,7 @@ async function salvarNovaCompra(){
     return;
   }
   if (incompleto){
-    mostrarToast('Complete insumo e quantidade de todos os itens, ou remova a linha.', 'erro');
+    mostrarToast('Complete o item (insumo ou embalagem) e a quantidade de todos os itens, ou remova a linha.', 'erro');
     return;
   }
   if (casasDemais){
@@ -302,10 +316,14 @@ function renderizarRelatorioCompras(){
     const dataFormatada = new Date(compra.data_compra + 'T00:00:00').toLocaleDateString('pt-BR');
     const recebida = compra.status === 'recebido';
     const fretesUnitarios = freteUnitarioDosItens(compra.compra_itens, frete);
-    const linhasItens = compra.compra_itens.map((item, i) => `
-      <div class="linha-info"><span>${item.insumos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${item.insumos.unidade_medida} × ${moedaUnitaria(Number(item.custo_unitario))}</span></div>
-      ${frete > 0 && Number(item.custo_unitario) > 0 ? `<div class="item-sub">custo com frete rateado: ${moedaUnitaria(Number(item.custo_unitario) + fretesUnitarios[i])} por ${item.insumos.unidade_medida}</div>` : ''}
-    `).join('');
+    const linhasItens = compra.compra_itens.map((item, i) => {
+      const nome = item.insumos ? item.insumos.nome : (item.embalagens ? item.embalagens.nome : '(item removido)');
+      const unidade = item.insumos ? item.insumos.unidade_medida : 'un';
+      return `
+        <div class="linha-info"><span>${nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${unidade} × ${moedaUnitaria(Number(item.custo_unitario))}</span></div>
+        ${frete > 0 && Number(item.custo_unitario) > 0 ? `<div class="item-sub">custo com frete rateado: ${moedaUnitaria(Number(item.custo_unitario) + fretesUnitarios[i])} por ${unidade}</div>` : ''}
+      `;
+    }).join('');
 
     return `
       <div class="compra-item">

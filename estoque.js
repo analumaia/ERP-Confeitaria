@@ -7,13 +7,14 @@
 let itemEstoqueAtual = null; // { tipoItem, itemId, nome, saldoAtual, unidade } do item em exibição no momento
 
 async function carregarEstoque(){
-  const [respInsumos, respProdutos, respFichas] = await Promise.all([
+  const [respInsumos, respProdutos, respFichas, respEmbalagens] = await Promise.all([
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').order('nome'),
     supabaseClient.from('produtos').select('*, estoque_produtos(saldo_atual)').order('nome'),
     supabaseClient.from('receitas').select('*, estoque_fichas(saldo_atual)').order('nome'),
+    supabaseClient.from('embalagens').select('*, estoque_embalagens(saldo_atual)').order('nome'),
   ]);
 
-  if (respInsumos.error || respProdutos.error || respFichas.error){
+  if (respInsumos.error || respProdutos.error || respFichas.error || respEmbalagens.error){
     mostrarToast('Erro ao carregar o estoque.', 'erro');
     return;
   }
@@ -21,6 +22,7 @@ async function carregarEstoque(){
   dadosEstoque.insumos = respInsumos.data;
   dadosEstoque.produtos = respProdutos.data;
   dadosEstoque.fichas = respFichas.data;
+  dadosEstoque.embalagens = respEmbalagens.data;
 
   popularBuscaItemEstoque();
 
@@ -32,7 +34,8 @@ async function carregarEstoque(){
 function saldoDoItem(tipoItem, item){
   const relacao = tipoItem === 'insumo' ? item.estoque_insumos
     : tipoItem === 'produto' ? item.estoque_produtos
-    : item.estoque_fichas;
+    : tipoItem === 'ficha' ? item.estoque_fichas
+    : item.estoque_embalagens;
   // O Supabase pode devolver essa relação como objeto único (1-pra-1) ou
   // como lista de 1 item, dependendo da versão/detecção da FK — tratamos os dois casos.
   const registroSaldo = Array.isArray(relacao) ? relacao[0] : relacao;
@@ -68,6 +71,7 @@ function popularBuscaItemEstoque(){
     ...montar(dadosEstoque.insumos, 'insumo', 'Insumos'),
     ...montar(dadosEstoque.produtos, 'produto', 'Produtos'),
     ...montar(dadosEstoque.fichas, 'ficha', 'Fichas técnicas'),
+    ...montar(dadosEstoque.embalagens, 'embalagem', 'Embalagens'),
   ];
   if (!comboLista.hidden) renderizarListaCombo();
 }
@@ -244,7 +248,7 @@ function mostrarEstadoSemItem(){
   botoesAcaoEstoque.forEach(botao => { botao.disabled = true; });
   ['saldoItemEstoque', 'totalEntradasEstoque', 'totalSaidasEstoque'].forEach(id => { document.getElementById(id).textContent = '—'; });
   ['minimoItemEstoque', 'subEntradasEstoque', 'subSaidasEstoque', 'notaExtratoEstoque'].forEach(id => { document.getElementById(id).textContent = ''; });
-  document.getElementById('tabelaItemEstoque').innerHTML = '<div class="lista-vazia">Escolha um insumo, produto ou ficha técnica acima pra ver o saldo, os totais do período e o extrato de movimentações.</div>';
+  document.getElementById('tabelaItemEstoque').innerHTML = '<div class="lista-vazia">Escolha um insumo, produto, ficha técnica ou embalagem acima pra ver o saldo, os totais do período e o extrato de movimentações.</div>';
 }
 
 async function buscarItemEstoque(valor){
@@ -256,7 +260,8 @@ async function buscarItemEstoque(valor){
   const [tipoItem, itemId] = valor.split(':');
   const lista = tipoItem === 'insumo' ? dadosEstoque.insumos
     : tipoItem === 'produto' ? dadosEstoque.produtos
-    : dadosEstoque.fichas;
+    : tipoItem === 'ficha' ? dadosEstoque.fichas
+    : dadosEstoque.embalagens;
   const item = lista.find(r => String(r.id) === String(itemId));
   if (!item){
     mostrarEstadoSemItem();

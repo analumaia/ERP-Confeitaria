@@ -63,7 +63,7 @@
       <div class="item-estoque-topo">
         <div class="combo-item">
           <span class="combo-icone" aria-hidden="true">🔍</span>
-          <input type="text" id="buscaItemEstoque" class="combo-input" placeholder="Buscar insumo, produto ou ficha técnica..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="listaComboItem" aria-autocomplete="list">
+          <input type="text" id="buscaItemEstoque" class="combo-input" placeholder="Buscar insumo, produto, ficha técnica ou embalagem..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="listaComboItem" aria-autocomplete="list">
           <button type="button" class="combo-limpar" id="btnLimparItemEstoque" aria-label="Limpar seleção" hidden>×</button>
           <div class="combo-lista" id="listaComboItem" role="listbox" hidden></div>
         </div>
@@ -352,6 +352,32 @@
     </div>
   </section>
 
+  <!-- EMBALAGENS -->
+  <section class="conteudo-modulo" data-modulo="embalagens">
+    <div class="barra-modulo">
+      <h2>Embalagens</h2>
+      <input type="search" class="campo-busca" placeholder="Embalagem (pesquisa)" id="campoBuscaEmbalagem">
+      <button class="btn-novo" id="btnNovaEmbalagem">+ Nova embalagem</button>
+    </div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome da embalagem</th>
+              <th>Custo unitário</th>
+              <th>Dimensões</th>
+              <th>Estoque mín.</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaEmbalagens"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- PRODUTOS -->
   <section class="conteudo-modulo" data-modulo="produtos">
     <div class="barra-modulo">
@@ -534,6 +560,31 @@
   </div>
 </div>
 
+<!-- MODAL de Embalagem (próprio: nome, dimensões, estoque mínimo, custo — pill sem rótulo) -->
+<div class="modal-overlay" id="modalEmbalagemOverlay">
+  <div class="modal">
+    <h3 id="tituloModalEmbalagem">Nova embalagem</h3>
+    <form id="formEmbalagem">
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoNomeEmbalagem" placeholder="Nome da embalagem *" required>
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoDimensoesEmbalagem" placeholder="Dimensões (ex.: 20x20x10cm)">
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoEstoqueMinimoEmbalagem" step="0.01" min="0" placeholder="Estoque mínimo">
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoCustoEmbalagem" step="0.0001" min="0" placeholder="Custo unitário (R$)">
+      </div>
+      <div class="acoes-modal">
+        <button type="button" class="btn-secundario" id="btnCancelarEmbalagem">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarEmbalagem">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -547,6 +598,7 @@
 <script src="fichas.js"></script>
 <script src="produtos.js"></script>
 <script src="insumos.js"></script>
+<script src="embalagens.js"></script>
 <script src="producao.js"></script>
 <script src="vendas.js"></script>
 <script src="financeiro.js"></script>

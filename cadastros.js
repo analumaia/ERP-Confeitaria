@@ -1,13 +1,14 @@
 /* ============================================================
-   CADASTROS — CRUD genérico dos cadastros simples (fornecedores,
-   clientes). Cada um é descrito uma vez em MODULOS, e as mesmas
-   funções renderizam a lista, o formulário e fazem as chamadas
-   ao Supabase.
+   CADASTROS — CRUD genérico dos cadastros simples (hoje só
+   fornecedores). Cada um é descrito uma vez em MODULOS, e as
+   mesmas funções renderizam a lista, o formulário e fazem as
+   chamadas ao Supabase.
 
-   Produtos e Insumos NÃO estão aqui: por terem tabela em vez de
-   cards e precisarem de dados de outras tabelas (composição,
-   fichas técnicas relacionadas), ganharam suas próprias telas —
-   ver produtos.js e insumos.js.
+   Produtos, Insumos, Embalagens e Clientes NÃO estão aqui: por
+   terem tabela/formulário fixo em vez de modal, e em alguns casos
+   precisarem de dados de outras tabelas (composição, fichas
+   técnicas relacionadas, nº de compras), ganharam suas próprias
+   telas — ver produtos.js, insumos.js, embalagens.js e clientes.js.
    ============================================================ */
 
 const MODULOS = {
@@ -30,29 +31,10 @@ const MODULOS = {
       { chave: 'prazo_entrega_dias', label: 'Prazo', sufixo: ' dias' },
     ],
   },
-  clientes: {
-    tabela: 'clientes',
-    icone: '👤',
-    tituloCampo: 'nome',
-    nomeSingular: 'cliente',
-    temAtivo: false,
-    campos: [
-      { chave: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
-      { chave: 'telefone', label: 'Telefone', tipo: 'text' },
-      { chave: 'cep', label: 'CEP', tipo: 'text' },
-      { chave: 'rua', label: 'Rua', tipo: 'text' },
-      { chave: 'bairro', label: 'Bairro', tipo: 'text' },
-      { chave: 'cidade', label: 'Cidade', tipo: 'text' },
-    ],
-    infoCampos: [
-      { chave: 'telefone', label: 'Telefone' },
-      { chave: 'cidade', label: 'Cidade' },
-    ],
-  },
 };
 
 const NOMES_MODULO = {
-  fornecedores: 'fornecedores', clientes: 'clientes',
+  fornecedores: 'fornecedores',
 };
 
 // --------------------------------------------------------

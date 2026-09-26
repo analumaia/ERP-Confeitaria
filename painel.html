@@ -432,12 +432,72 @@
 
   <!-- CLIENTES -->
   <section class="conteudo-modulo" data-modulo="clientes">
-    <div class="barra-modulo">
-      <h2>Clientes</h2>
-      <input type="search" class="campo-busca" placeholder="Buscar cliente..." data-busca="clientes">
-      <button class="btn-novo" data-novo="clientes">+ Novo cliente</button>
+    <div class="barra-modulo"><h2>Clientes</h2></div>
+
+    <div class="fichas-layout">
+
+      <!-- Novo cliente / editar (formulário fixo) -->
+      <form class="cartao-item cartao-nova-compra" id="formCliente" novalidate>
+        <div class="compra-corpo">
+          <h3 class="compra-titulo" id="tituloFormCliente">Novo cliente</h3>
+
+          <div class="form-grupo">
+            <label for="campoNomeCliente">Nome</label>
+            <input type="text" id="campoNomeCliente" placeholder="Nome do cliente">
+          </div>
+
+          <div class="form-grupo">
+            <label for="campoTelefoneCliente">Telefone</label>
+            <input type="text" id="campoTelefoneCliente" placeholder="(00) 00000-0000">
+          </div>
+
+          <div class="form-grupo">
+            <label for="campoCepCliente">CEP</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="campoCepCliente" placeholder="00000-000" inputmode="numeric" maxlength="9" style="flex:1;">
+              <button type="button" class="btn-secundario" id="btnBuscarCep" style="white-space:nowrap;">Buscar CEP</button>
+            </div>
+            <div class="item-sub" id="statusCepCliente"></div>
+          </div>
+
+          <div class="form-grupo">
+            <label for="campoRuaCliente">Rua</label>
+            <input type="text" id="campoRuaCliente" placeholder="Rua, avenida...">
+          </div>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoBairroCliente">Bairro</label>
+              <input type="text" id="campoBairroCliente">
+            </div>
+            <div class="form-grupo">
+              <label for="campoNumeroCliente">Nº</label>
+              <input type="text" id="campoNumeroCliente" placeholder="Número">
+            </div>
+          </div>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoCidadeCliente">Cidade</label>
+              <input type="text" id="campoCidadeCliente">
+            </div>
+            <div class="form-grupo">
+              <label for="campoUfCliente">UF</label>
+              <input type="text" id="campoUfCliente" placeholder="MG" maxlength="2" style="text-transform:uppercase;">
+            </div>
+          </div>
+        </div>
+
+        <div class="compra-acoes">
+          <button type="button" class="compra-btn-cancelar" id="btnCancelarCliente">Cancelar</button>
+          <button type="submit" class="compra-btn-salvar" id="btnSalvarCliente">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Clientes cadastrados -->
+      <div class="lista-cards fichas-grade" id="listaClientes"></div>
+
     </div>
-    <div class="lista-cards" data-lista="clientes"></div>
   </section>
 
   <!-- CONFIGURAÇÕES -->
@@ -599,6 +659,7 @@
 <script src="produtos.js"></script>
 <script src="insumos.js"></script>
 <script src="embalagens.js"></script>
+<script src="clientes.js"></script>
 <script src="producao.js"></script>
 <script src="vendas.js"></script>
 <script src="financeiro.js"></script>

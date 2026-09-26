@@ -130,6 +130,8 @@ function trocarAba(chave){
     carregarInsumosTabela(); // fora de MODULOS — tela própria (tabela + relacionados)
   } else if (chave === 'embalagens'){
     carregarEmbalagensTabela(); // fora de MODULOS — tela própria (tabela)
+  } else if (chave === 'clientes'){
+    carregarClientes(); // fora de MODULOS — tela própria (form fixo + nº de compras)
   } else if (chave === 'vendas'){
     carregarVendas();
   } else if (chave === 'financeiro'){

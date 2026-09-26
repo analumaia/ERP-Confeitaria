@@ -49,8 +49,9 @@ async function carregarFinanceiro(){
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:var(--vermelho);">${formatarMoeda(totalSaidas)}</span></div>
     </div>
     <div class="cartao-item">
-      <div class="titulo-item"><span>Saldo do mês</span></div>
+      <div class="titulo-item"><span>Saldo do mês (bruto)</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${saldo >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(saldo)}</span></div>
+      <div class="item-sub">Não desconta taxa de maquininha nem frete das vendas — veja o valor líquido recebido em Vendas, ou o lucro líquido estimado na Visão geral.</div>
     </div>
   `;
 

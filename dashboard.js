@@ -303,7 +303,7 @@ async function carregarDashboard(){
           <div class="item-sub">Lançamentos manuais em Financeiro.</div>
         </div>
         <div class="cartao-item kpi">
-          <div class="kpi-titulo">Lucro estimado</div>
+          <div class="kpi-titulo">Lucro líquido estimado</div>
           <div class="kpi-valor" style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</div>
           <div class="item-sub">Margem bruta − outras despesas − taxa − frete.</div>
         </div>

@@ -50,9 +50,11 @@ function renderizarResumoVendas(pedidos){
     const totalPedido = p.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
     const desconto = Math.min(totalPedido, Number(p.desconto || 0));
     const totalComDesconto = totalPedido - desconto;
+    const frete = Number(p.valor_frete || 0);
     const taxaPct = p.formas_pagamento ? Number(p.formas_pagamento.taxa_percentual) : 0;
     faturamentoBruto += totalPedido;
-    deducoesTotais += desconto + totalComDesconto * (taxaPct / 100) + Number(p.valor_frete || 0);
+    // frete passa pela mesma maquininha, então entra na base da taxa também
+    deducoesTotais += desconto + (totalComDesconto + frete) * (taxaPct / 100) + frete;
   });
   const recebidoLiquido = faturamentoBruto - deducoesTotais;
 
@@ -222,8 +224,9 @@ function recalcularTotaisVendaAtual(){
   const totalComDesconto = total - desconto;
   const opcaoForma = document.getElementById('campoFormaPagamentoVenda').selectedOptions[0];
   const taxaPct = opcaoForma ? Number(opcaoForma.dataset.taxa || 0) : 0;
-  const taxa = totalComDesconto * (taxaPct / 100);
   const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
+  // frete passa pela mesma maquininha junto com os itens, então entra na base da taxa também
+  const taxa = (totalComDesconto + frete) * (taxaPct / 100);
   const liquido = totalComDesconto - taxa - frete;
 
   document.getElementById('totalPedidoVenda').textContent = formatarMoeda(total);

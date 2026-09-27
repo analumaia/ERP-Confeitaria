@@ -95,9 +95,11 @@ async function carregarDashboard(){
       const desconto = Math.min(valorPedidoItens, Number(pedido.desconto || 0));
       const totalComDesconto = valorPedidoItens - desconto;
       const taxaPercentual = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
+      const freteDoPedido = Number(pedido.valor_frete || 0);
       faturamento += totalComDesconto;
-      taxaMaquininha += totalComDesconto * (taxaPercentual / 100);
-      frete += Number(pedido.valor_frete || 0);
+      // frete passa pela mesma maquininha junto com os itens, então entra na base da taxa também
+      taxaMaquininha += (totalComDesconto + freteDoPedido) * (taxaPercentual / 100);
+      frete += freteDoPedido;
     });
     const quantidadePedidos = pedidos.length;
     const ticketMedio = quantidadePedidos > 0 ? faturamento / quantidadePedidos : 0;

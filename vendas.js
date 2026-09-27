@@ -4,17 +4,21 @@
    ============================================================ */
 
 let itensVendaAtual = []; // [{ produto_id, nome, quantidade, preco_unitario }]
+let itensEmbalagemVendaAtual = []; // [{ embalagem_id, nome, quantidade }] — não entra no preço, só no estoque/custo
 let produtosParaVenda = [];
+let embalagensParaVenda = [];
 let formasPagamentoParaVenda = [];
+let modoDescontoVenda = 'valor'; // 'valor' (R$) ou 'percentual' (%) — alternado pelo botão ao lado do campo
 
 async function carregarVendas(){
   const container = document.getElementById('listaVendas');
   container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
-  const [respPedidos, respClientes, respProdutos, respFormas] = await Promise.all([
-    supabaseClient.from('pedidos').select('*, clientes(nome), formas_pagamento(nome, taxa_percentual), pedido_itens(quantidade, preco_unitario, produtos(nome))').order('criado_em', { ascending: false }),
+  const [respPedidos, respClientes, respProdutos, respEmbalagens, respFormas] = await Promise.all([
+    supabaseClient.from('pedidos').select('*, clientes(nome), formas_pagamento(nome, taxa_percentual), pedido_itens(quantidade, preco_unitario, produtos(nome)), pedido_embalagens(quantidade, embalagens(nome))').order('criado_em', { ascending: false }),
     supabaseClient.from('clientes').select('*').order('nome'),
     supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
+    supabaseClient.from('embalagens').select('*').order('nome'),
     supabaseClient.from('formas_pagamento').select('*').order('nome'),
   ]);
 
@@ -26,9 +30,12 @@ async function carregarVendas(){
 
   dadosCarregados.pedidos = respPedidos.data;
   produtosParaVenda = respProdutos.data || [];
+  embalagensParaVenda = respEmbalagens.data || [];
   formasPagamentoParaVenda = respFormas.data || [];
 
   popularFormularioNovoPedido(respClientes.data || []);
+  renderizarItensVendaAtual();
+  renderizarItensEmbalagemVendaAtual();
   renderizarResumoVendas(respPedidos.data);
   renderizarVendas(respPedidos.data);
 }
@@ -84,6 +91,9 @@ function renderizarVendas(pedidos){
     const linhasItens = pedido.pedido_itens.map(item => `
       <div class="linha-info"><span>${item.produtos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} × ${Number(item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
     `).join('');
+    const linhaEmbalagens = (pedido.pedido_embalagens || []).length > 0
+      ? `<div class="item-sub">Embalagem: ${pedido.pedido_embalagens.map(pe => `${pe.embalagens ? pe.embalagens.nome : '(removida)'} (x${Number(pe.quantidade).toLocaleString('pt-BR')})`).join(', ')}</div>`
+      : '';
 
     return `
       <div class="cartao-item">
@@ -94,6 +104,7 @@ function renderizarVendas(pedidos){
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
         ${pedido.formas_pagamento ? `<div class="linha-info"><span>Pagamento</span><span>${pedido.formas_pagamento.nome}</span></div>` : ''}
         ${linhasItens}
+        ${linhaEmbalagens}
         ${Number(pedido.desconto) > 0 ? `<div class="linha-info"><span>Desconto</span><span>− ${Number(pedido.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
         ${Number(pedido.valor_frete) > 0 ? `<div class="linha-info"><span>Frete</span><span>${Number(pedido.valor_frete).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
         <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
@@ -148,6 +159,9 @@ function popularFormularioNovoPedido(clientes){
   document.getElementById('campoProdutoVenda').innerHTML =
     '<option value="">Escolha um produto</option>' + produtosParaVenda.map(p => `<option value="${p.id}" data-preco="${p.preco_venda}">${p.nome}</option>`).join('');
 
+  document.getElementById('campoEmbalagemVenda').innerHTML =
+    '<option value="">Escolha uma embalagem</option>' + embalagensParaVenda.map(e => `<option value="${e.id}">${e.nome}${e.dimensoes ? ' — ' + e.dimensoes : ''}</option>`).join('');
+
   if (!document.getElementById('campoDataVenda').value){
     document.getElementById('campoDataVenda').value = new Date().toISOString().slice(0, 10);
   }
@@ -177,10 +191,34 @@ function renderizarItensVendaAtual(){
   recalcularTotaisVendaAtual();
 }
 
+// Lista de embalagens do pedido — sem preço, só quantidade (não afeta o total)
+function renderizarItensEmbalagemVendaAtual(){
+  const container = document.getElementById('itensEmbalagemVendaLista');
+  if (itensEmbalagemVendaAtual.length === 0){
+    container.innerHTML = '<div class="lista-vazia">Nenhuma embalagem adicionada ainda.</div>';
+    return;
+  }
+  container.innerHTML = itensEmbalagemVendaAtual.map((item, indice) => `
+    <div class="linha-info">
+      <span>${item.nome} — ${item.quantidade} un.</span>
+      <span><button type="button" class="btn-acao excluir" data-remover-embalagem-atual="${indice}" style="padding:2px 8px; margin-left:8px;">×</button></span>
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-remover-embalagem-atual]').forEach(botao => {
+    botao.addEventListener('click', () => {
+      itensEmbalagemVendaAtual.splice(Number(botao.dataset.removerEmbalagemAtual), 1);
+      renderizarItensEmbalagemVendaAtual();
+    });
+  });
+}
+
 function recalcularTotaisVendaAtual(){
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const total = itensVendaAtual.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
-  const desconto = Math.min(total, Number(document.getElementById('campoDescontoVenda').value) || 0);
+  const valorDescontoDigitado = Number(document.getElementById('campoDescontoVenda').value) || 0;
+  const desconto = modoDescontoVenda === 'percentual'
+    ? Math.min(total, total * (Math.min(valorDescontoDigitado, 100) / 100))
+    : Math.min(total, valorDescontoDigitado);
   const totalComDesconto = total - desconto;
   const opcaoForma = document.getElementById('campoFormaPagamentoVenda').selectedOptions[0];
   const taxaPct = opcaoForma ? Number(opcaoForma.dataset.taxa || 0) : 0;
@@ -217,9 +255,63 @@ document.getElementById('btnAdicionarItemVenda').addEventListener('click', () =>
   renderizarItensVendaAtual();
 });
 
+document.getElementById('btnAdicionarEmbalagemVenda').addEventListener('click', () => {
+  const selectEmbalagem = document.getElementById('campoEmbalagemVenda');
+  const opcao = selectEmbalagem.selectedOptions[0];
+  const quantidade = Number(document.getElementById('campoQuantidadeEmbalagemVenda').value);
+
+  if (!selectEmbalagem.value || !quantidade || quantidade <= 0){
+    mostrarToast('Escolha uma embalagem e uma quantidade válida.', 'erro');
+    return;
+  }
+
+  itensEmbalagemVendaAtual.push({
+    embalagem_id: selectEmbalagem.value,
+    nome: opcao.textContent,
+    quantidade,
+  });
+
+  selectEmbalagem.value = '';
+  document.getElementById('campoQuantidadeEmbalagemVenda').value = 1;
+  renderizarItensEmbalagemVendaAtual();
+});
+
 document.getElementById('campoFormaPagamentoVenda').addEventListener('change', recalcularTotaisVendaAtual);
 document.getElementById('campoDescontoVenda').addEventListener('input', recalcularTotaisVendaAtual);
 document.getElementById('campoFreteVenda').addEventListener('input', recalcularTotaisVendaAtual);
+
+// Alterna a leitura do campo Desconto entre R$ (valor fixo) e % (percentual
+// sobre o total dos itens) — o botão mostra o modo atual
+document.getElementById('btnModoDescontoVenda').addEventListener('click', () => {
+  modoDescontoVenda = modoDescontoVenda === 'valor' ? 'percentual' : 'valor';
+  const botao = document.getElementById('btnModoDescontoVenda');
+  const campo = document.getElementById('campoDescontoVenda');
+  if (modoDescontoVenda === 'percentual'){
+    botao.textContent = '%';
+    campo.max = 100;
+    campo.step = 0.1;
+  } else {
+    botao.textContent = 'R$';
+    campo.removeAttribute('max');
+    campo.step = 0.01;
+  }
+  recalcularTotaisVendaAtual();
+});
+
+function resetarFormularioNovaVenda(){
+  itensVendaAtual = [];
+  itensEmbalagemVendaAtual = [];
+  document.getElementById('campoObservacaoVenda').value = '';
+  document.getElementById('campoDescontoVenda').value = 0;
+  document.getElementById('campoFreteVenda').value = 0;
+  document.getElementById('campoClienteVenda').value = '';
+  document.getElementById('campoFormaPagamentoVenda').value = '';
+  document.getElementById('campoDataVenda').value = new Date().toISOString().slice(0, 10);
+  renderizarItensVendaAtual();
+  renderizarItensEmbalagemVendaAtual();
+}
+
+document.getElementById('btnCancelarVenda').addEventListener('click', resetarFormularioNovaVenda);
 
 document.getElementById('btnRegistrarVenda').addEventListener('click', async () => {
   if (itensVendaAtual.length === 0){
@@ -231,8 +323,15 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
   const formaPagamentoId = document.getElementById('campoFormaPagamentoVenda').value || null;
   const dataVenda = document.getElementById('campoDataVenda').value;
   const observacao = document.getElementById('campoObservacaoVenda').value.trim() || null;
-  const desconto = Number(document.getElementById('campoDescontoVenda').value) || 0;
   const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
+
+  // desconto sempre vira R$ na hora de salvar — a coluna pedidos.desconto
+  // guarda valor em reais, então um desconto em % é convertido aqui
+  const totalItens = itensVendaAtual.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
+  const valorDescontoDigitado = Number(document.getElementById('campoDescontoVenda').value) || 0;
+  const desconto = modoDescontoVenda === 'percentual'
+    ? Math.min(totalItens, totalItens * (Math.min(valorDescontoDigitado, 100) / 100))
+    : Math.min(totalItens, valorDescontoDigitado);
 
   const btnRegistrar = document.getElementById('btnRegistrarVenda');
   btnRegistrar.disabled = true;
@@ -256,22 +355,28 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
   }));
   const { error: erroItens } = await supabaseClient.from('pedido_itens').insert(itensComPedidoId);
 
-  btnRegistrar.disabled = false;
-  btnRegistrar.textContent = 'Registrar pedido';
-
   if (erroItens){
+    btnRegistrar.disabled = false;
+    btnRegistrar.textContent = 'Registrar pedido';
     mostrarToast('Pedido criado, mas houve erro ao salvar os itens.', 'erro');
     carregarVendas();
     return;
   }
 
+  if (itensEmbalagemVendaAtual.length > 0){
+    const embalagensComPedidoId = itensEmbalagemVendaAtual.map(item => ({
+      embalagem_id: item.embalagem_id, quantidade: item.quantidade, pedido_id: pedidoCriado.id,
+    }));
+    const { error: erroEmbalagens } = await supabaseClient.from('pedido_embalagens').insert(embalagensComPedidoId);
+    if (erroEmbalagens){
+      mostrarToast('Pedido e itens criados, mas as embalagens não foram salvas.', 'erro');
+    }
+  }
+
+  btnRegistrar.disabled = false;
+  btnRegistrar.textContent = 'Registrar pedido';
+
   mostrarToast('Pedido registrado!');
-  itensVendaAtual = [];
-  document.getElementById('campoObservacaoVenda').value = '';
-  document.getElementById('campoDescontoVenda').value = 0;
-  document.getElementById('campoFreteVenda').value = 0;
-  document.getElementById('campoClienteVenda').value = '';
-  document.getElementById('campoFormaPagamentoVenda').value = '';
-  renderizarItensVendaAtual();
+  resetarFormularioNovaVenda();
   carregarVendas();
 });

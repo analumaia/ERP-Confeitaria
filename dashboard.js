@@ -45,8 +45,8 @@ async function carregarDashboard(){
   const respostas = await Promise.all([
     supabaseClient.from('lancamentos_financeiros').select('tipo, valor, origem').gte('data', mesAtual.primeiroDia).lte('data', mesAtual.ultimoDia),
     supabaseClient.from('lancamentos_financeiros').select('tipo, valor, data').gte('data', seisMesesAtras.primeiroDia).lte('data', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome)), pedido_embalagens(quantidade, embalagens(custo_unitario)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAtual.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
+    supabaseClient.from('pedidos').select('*, pedido_itens(quantidade, preco_unitario, produto_id), pedido_embalagens(quantidade, embalagens(custo_unitario)), formas_pagamento(taxa_percentual)').eq('status', 'confirmado').gte('data_pedido', mesAnterior.primeiroDia).lte('data_pedido', mesAnterior.ultimoDia),
     supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
     supabaseClient.from('metas').select('*').eq('mes_ano', mesSelecionado).order('criado_em'),
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').eq('ativo', true),
@@ -87,6 +87,9 @@ async function carregarDashboard(){
         valorPedidoItens += Number(item.quantidade) * Number(item.preco_unitario);
         produtosVendidos += Number(item.quantidade);
         custoTotal += Number(item.quantidade) * (custoUnitarioPorProduto[item.produto_id] || 0);
+      });
+      (pedido.pedido_embalagens || []).forEach(pe => {
+        custoTotal += Number(pe.quantidade) * (pe.embalagens ? Number(pe.embalagens.custo_unitario) : 0);
       });
       // mesma fórmula usada pelo trigger confirmar_venda, pra bater com o financeiro real
       const desconto = Math.min(valorPedidoItens, Number(pedido.desconto || 0));
@@ -282,7 +285,7 @@ async function carregarDashboard(){
 
     <!-- 4. Financeiro estratégico -->
     <div class="barra-modulo" style="margin:14px 0 -8px;"><h2>Financeiro estratégico</h2></div>
-    <p class="dash-nota">Custo e margem são estimados pela ficha técnica — produtos sem ficha entram com custo zero. Taxa e frete vêm de cada pedido.</p>
+    <p class="dash-nota">Custo e margem são estimados pela ficha técnica e pelas embalagens usadas em cada venda — produtos sem ficha entram com custo zero. Taxa e frete vêm de cada pedido.</p>
     <div class="dash-financeiro">
       <div class="cartao-item cartao-grafico">
         <div class="titulo-item"><span>Faturamento x despesas (6 meses)</span></div>
@@ -303,7 +306,7 @@ async function carregarDashboard(){
           <div class="item-sub">Lançamentos manuais em Financeiro.</div>
         </div>
         <div class="cartao-item kpi">
-          <div class="kpi-titulo">Lucro líquido estimado</div>
+          <div class="kpi-titulo">Lucro estimado</div>
           <div class="kpi-valor" style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</div>
           <div class="item-sub">Margem bruta − outras despesas − taxa − frete.</div>
         </div>

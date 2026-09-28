@@ -9,13 +9,14 @@ let produtosParaVenda = [];
 let embalagensParaVenda = [];
 let formasPagamentoParaVenda = [];
 let modoDescontoVenda = 'valor'; // 'valor' (R$) ou 'percentual' (%) — alternado pelo botão ao lado do campo
+let pedidoEmEdicaoId = null; // não-nulo enquanto o formulário está editando um pedido em aberto existente
 
 async function carregarVendas(){
-  const container = document.getElementById('listaVendas');
-  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  const corpo = document.getElementById('corpoTabelaVendas');
+  if (!dadosCarregados.pedidos) corpo.innerHTML = '<tr><td colspan="8" class="lista-vazia">Carregando...</td></tr>';
 
   const [respPedidos, respClientes, respProdutos, respEmbalagens, respFormas] = await Promise.all([
-    supabaseClient.from('pedidos').select('*, clientes(nome), formas_pagamento(nome, taxa_percentual), pedido_itens(quantidade, preco_unitario, produtos(nome)), pedido_embalagens(quantidade, embalagens(nome))').order('criado_em', { ascending: false }),
+    supabaseClient.from('pedidos').select('*, clientes(nome), formas_pagamento(nome, taxa_percentual), pedido_itens(id, produto_id, quantidade, preco_unitario, produtos(nome)), pedido_embalagens(id, embalagem_id, quantidade, embalagens(nome))').order('criado_em', { ascending: false }),
     supabaseClient.from('clientes').select('*').order('nome'),
     supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
     supabaseClient.from('embalagens').select('*').order('nome'),
@@ -23,7 +24,7 @@ async function carregarVendas(){
   ]);
 
   if (respPedidos.error){
-    container.innerHTML = '<div class="lista-vazia">Não foi possível carregar as vendas.</div>';
+    corpo.innerHTML = '<tr><td colspan="8" class="lista-vazia">Não foi possível carregar as vendas.</td></tr>';
     mostrarToast('Erro ao carregar vendas.', 'erro');
     return;
   }
@@ -80,74 +81,144 @@ function renderizarResumoVendas(pedidos){
 }
 
 function renderizarVendas(pedidos){
-  const container = document.getElementById('listaVendas');
+  const corpo = document.getElementById('corpoTabelaVendas');
   if (pedidos.length === 0){
-    container.innerHTML = '<div class="lista-vazia">Nenhum pedido registrado ainda.</div>';
+    corpo.innerHTML = '<tr><td colspan="8" class="lista-vazia">Nenhum pedido registrado ainda.</td></tr>';
     return;
   }
 
-  container.innerHTML = pedidos.map(pedido => {
-    const total = pedido.pedido_itens.reduce((soma, item) => soma + Number(item.quantidade) * Number(item.preco_unitario), 0);
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatarNumeroVenda = n => '#' + String(n).padStart(4, '0');
+
+  corpo.innerHTML = pedidos.map(pedido => {
+    const valorItens = pedido.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
+    const desconto = Math.min(valorItens, Number(pedido.desconto || 0));
+    const valorPedido = valorItens - desconto;
+    const frete = Number(pedido.valor_frete || 0);
+    const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
+    // mesma fórmula do formulário/dashboard: frete passa pela maquininha, entra na base da taxa
+    const taxa = (valorPedido + frete) * (taxaPct / 100);
+    const valorFinal = valorPedido - taxa - frete;
     const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
-    const statusLabel = pedido.status === 'confirmado' ? 'Confirmado' : 'Em aberto';
-    const linhasItens = pedido.pedido_itens.map(item => `
-      <div class="linha-info"><span>${item.produtos.nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} × ${Number(item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-    `).join('');
-    const linhaEmbalagens = (pedido.pedido_embalagens || []).length > 0
-      ? `<div class="item-sub">Embalagem: ${pedido.pedido_embalagens.map(pe => `${pe.embalagens ? pe.embalagens.nome : '(removida)'} (x${Number(pe.quantidade).toLocaleString('pt-BR')})`).join(', ')}</div>`
-      : '';
+
+    const badgeStatus = pedido.status === 'confirmado'
+      ? '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">Confirmado</span>'
+      : pedido.status === 'cancelado'
+        ? '<span class="badge-inativo">Cancelado</span>'
+        : '<span class="badge-estoque-baixo">Em aberto</span>';
+
+    const acoesEdicao = pedido.status === 'aberto'
+      ? `<button type="button" class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar</button>
+         <button type="button" class="btn-acao" data-editar-venda="${pedido.id}">Editar</button>`
+      : '—';
+    const acaoCancelar = pedido.status !== 'cancelado'
+      ? `<button type="button" class="btn-acao excluir" data-cancelar-venda="${pedido.id}">Cancelar</button>`
+      : '—';
 
     return `
-      <div class="cartao-item">
-        <div class="titulo-item">
-          <span>${pedido.clientes ? pedido.clientes.nome : 'Sem cliente'}</span>
-          ${pedido.status === 'aberto' ? '<span class="badge-estoque-baixo">' + statusLabel + '</span>' : '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">' + statusLabel + '</span>'}
-        </div>
-        <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
-        ${pedido.formas_pagamento ? `<div class="linha-info"><span>Pagamento</span><span>${pedido.formas_pagamento.nome}</span></div>` : ''}
-        ${linhasItens}
-        ${linhaEmbalagens}
-        ${Number(pedido.desconto) > 0 ? `<div class="linha-info"><span>Desconto</span><span>− ${Number(pedido.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
-        ${Number(pedido.valor_frete) > 0 ? `<div class="linha-info"><span>Frete</span><span>${Number(pedido.valor_frete).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>` : ''}
-        <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;">
-          <span>Total</span><span>${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-        </div>
-        <div class="acoes-item">
-          ${pedido.status === 'aberto' ? `<button class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar pedido</button>
-          <button class="btn-acao excluir" data-excluir-venda="${pedido.id}">Excluir</button>` : ''}
-        </div>
-      </div>
+      <tr>
+        <td class="celula-principal">${formatarNumeroVenda(pedido.numero_venda)}</td>
+        <td>${dataFormatada}<br>${badgeStatus}</td>
+        <td>${pedido.clientes ? pedido.clientes.nome : 'Sem cliente'}</td>
+        <td>${pedido.formas_pagamento ? pedido.formas_pagamento.nome : '—'}</td>
+        <td>${formatarMoeda(valorPedido)}</td>
+        <td>${formatarMoeda(valorFinal)}</td>
+        <td>${acoesEdicao}</td>
+        <td>${acaoCancelar}</td>
+      </tr>
     `;
   }).join('');
 
-  container.querySelectorAll('[data-confirmar-venda]').forEach(botao => {
+  corpo.querySelectorAll('[data-confirmar-venda]').forEach(botao => {
     botao.addEventListener('click', () => confirmarVenda(botao.dataset.confirmarVenda));
   });
-  container.querySelectorAll('[data-excluir-venda]').forEach(botao => {
-    botao.addEventListener('click', () => excluirVenda(botao.dataset.excluirVenda));
+  corpo.querySelectorAll('[data-editar-venda]').forEach(botao => {
+    botao.addEventListener('click', () => editarPedido(botao.dataset.editarVenda));
+  });
+  corpo.querySelectorAll('[data-cancelar-venda]').forEach(botao => {
+    botao.addEventListener('click', () => cancelarPedido(botao.dataset.cancelarVenda));
   });
 }
 
 async function confirmarVenda(id){
-  if (!window.confirm('Confirmar este pedido? Isso vai dar saída dos produtos no estoque automaticamente.')) return;
+  const pedido = (dadosCarregados.pedidos || []).find(p => String(p.id) === String(id));
+  const rotulo = pedido ? `#${String(pedido.numero_venda).padStart(4, '0')}` : 'este';
+  if (!window.confirm(`Confirmar o pedido ${rotulo}? Isso vai dar saída dos produtos (e embalagens, se houver) no estoque automaticamente.`)) return;
   const { error } = await supabaseClient.from('pedidos').update({ status: 'confirmado' }).eq('id', id);
   if (error){
     mostrarToast(error.message || 'Não foi possível confirmar o pedido.', 'erro');
     return;
   }
-  mostrarToast('Pedido confirmado — estoque atualizado!');
+  mostrarToast(`Pedido ${rotulo} confirmado — estoque atualizado!`);
   carregarVendas();
 }
 
-async function excluirVenda(id){
-  if (!window.confirm('Excluir este pedido? Essa ação não pode ser desfeita.')) return;
-  const { error } = await supabaseClient.from('pedidos').delete().eq('id', id);
+// Pedido nunca é excluído — só cancelado. Cancelar um pedido já
+// confirmado estorna o estoque debitado e remove o ganho do
+// financeiro (feito pelo trigger cancelar_venda, no banco); cancelar
+// um pedido em aberto só marca o status, já que nada foi debitado ainda.
+async function cancelarPedido(id){
+  const pedido = (dadosCarregados.pedidos || []).find(p => String(p.id) === String(id));
+  const rotulo = pedido ? `#${String(pedido.numero_venda).padStart(4, '0')}` : 'este';
+  const mensagem = pedido && pedido.status === 'confirmado'
+    ? `Cancelar o pedido ${rotulo}? O estoque debitado será estornado e o valor será removido do faturamento. Essa ação não pode ser desfeita.`
+    : `Cancelar o pedido ${rotulo}? Essa ação não pode ser desfeita.`;
+
+  if (!window.confirm(mensagem)) return;
+
+  const { error } = await supabaseClient.from('pedidos').update({ status: 'cancelado' }).eq('id', id);
   if (error){
-    mostrarToast('Não foi possível excluir o pedido.', 'erro');
+    mostrarToast(error.message || 'Não foi possível cancelar o pedido.', 'erro');
     return;
   }
-  mostrarToast('Pedido excluído.');
+  if (String(pedidoEmEdicaoId) === String(id)) resetarFormularioNovaVenda();
+  mostrarToast(`Pedido ${rotulo} cancelado.`);
   carregarVendas();
+}
+
+// Só pedidos em aberto podem ser editados — depois de confirmado ou
+// cancelado, o pedido já teve efeito no estoque/financeiro, então
+// editar deixaria de bater com o que foi de fato debitado.
+function editarPedido(id){
+  const pedido = (dadosCarregados.pedidos || []).find(p => String(p.id) === String(id));
+  if (!pedido) return;
+  if (pedido.status !== 'aberto'){
+    mostrarToast('Só é possível editar pedidos em aberto.', 'erro');
+    return;
+  }
+
+  pedidoEmEdicaoId = pedido.id;
+  document.getElementById('tituloNovoPedido').textContent = `Editar pedido #${String(pedido.numero_venda).padStart(4, '0')}`;
+  document.getElementById('btnRegistrarVenda').textContent = 'Salvar alterações';
+
+  document.getElementById('campoClienteVenda').value = pedido.cliente_id || '';
+  document.getElementById('campoFormaPagamentoVenda').value = pedido.forma_pagamento_id || '';
+  document.getElementById('campoDataVenda').value = pedido.data_pedido;
+  document.getElementById('campoObservacaoVenda').value = pedido.observacao || '';
+  document.getElementById('campoFreteVenda').value = pedido.valor_frete || 0;
+
+  // o desconto salvo é sempre em R$ — volta pro modo R$ ao editar
+  modoDescontoVenda = 'valor';
+  document.getElementById('btnModoDescontoVenda').textContent = 'R$';
+  document.getElementById('campoDescontoVenda').removeAttribute('max');
+  document.getElementById('campoDescontoVenda').step = 0.01;
+  document.getElementById('campoDescontoVenda').value = pedido.desconto || 0;
+
+  itensVendaAtual = pedido.pedido_itens.map(item => ({
+    produto_id: item.produto_id,
+    nome: item.produtos ? item.produtos.nome : '(produto removido)',
+    quantidade: Number(item.quantidade),
+    preco_unitario: Number(item.preco_unitario),
+  }));
+  itensEmbalagemVendaAtual = (pedido.pedido_embalagens || []).map(pe => ({
+    embalagem_id: pe.embalagem_id,
+    nome: pe.embalagens ? pe.embalagens.nome : '(embalagem removida)',
+    quantidade: Number(pe.quantidade),
+  }));
+
+  renderizarItensVendaAtual();
+  renderizarItensEmbalagemVendaAtual();
+  document.getElementById('cartaoNovoPedido').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // --------- Novo pedido (formulário inline, sem modal) ---------
@@ -304,6 +375,9 @@ document.getElementById('btnModoDescontoVenda').addEventListener('click', () => 
 function resetarFormularioNovaVenda(){
   itensVendaAtual = [];
   itensEmbalagemVendaAtual = [];
+  pedidoEmEdicaoId = null;
+  document.getElementById('tituloNovoPedido').textContent = 'Novo pedido';
+  document.getElementById('btnRegistrarVenda').textContent = 'Registrar pedido';
   document.getElementById('campoObservacaoVenda').value = '';
   document.getElementById('campoDescontoVenda').value = 0;
   document.getElementById('campoFreteVenda').value = 0;
@@ -336,50 +410,73 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
     ? Math.min(totalItens, totalItens * (Math.min(valorDescontoDigitado, 100) / 100))
     : Math.min(totalItens, valorDescontoDigitado);
 
+  const dadosPedido = { cliente_id: clienteId, data_pedido: dataVenda, forma_pagamento_id: formaPagamentoId, observacao, valor_frete: frete, desconto };
+
   const btnRegistrar = document.getElementById('btnRegistrarVenda');
   btnRegistrar.disabled = true;
-  btnRegistrar.textContent = 'Registrando...';
+  btnRegistrar.textContent = pedidoEmEdicaoId ? 'Salvando...' : 'Registrando...';
 
-  const { data: pedidoCriado, error: erroPedido } = await supabaseClient
-    .from('pedidos')
-    .insert({ cliente_id: clienteId, data_pedido: dataVenda, status: 'aberto', forma_pagamento_id: formaPagamentoId, observacao, valor_frete: frete, desconto })
-    .select()
-    .single();
+  let pedidoId = pedidoEmEdicaoId;
+  let numeroVenda = pedidoEmEdicaoId ? (dadosCarregados.pedidos || []).find(p => String(p.id) === String(pedidoEmEdicaoId))?.numero_venda : null;
 
-  if (erroPedido){
-    btnRegistrar.disabled = false;
-    btnRegistrar.textContent = 'Registrar pedido';
-    mostrarToast('Não foi possível criar o pedido.', 'erro');
-    return;
+  if (pedidoEmEdicaoId){
+    // edição: atualiza o pedido, e substitui os itens/embalagens (apaga e
+    // reinsere) — mais simples que fazer diff, e seguro porque só se edita
+    // pedido em aberto (nada foi debitado em estoque/financeiro ainda)
+    const { error: erroAtualizar } = await supabaseClient.from('pedidos').update(dadosPedido).eq('id', pedidoEmEdicaoId);
+    if (erroAtualizar){
+      btnRegistrar.disabled = false;
+      btnRegistrar.textContent = 'Salvar alterações';
+      mostrarToast('Não foi possível salvar as alterações do pedido.', 'erro');
+      return;
+    }
+    await supabaseClient.from('pedido_itens').delete().eq('pedido_id', pedidoEmEdicaoId);
+    await supabaseClient.from('pedido_embalagens').delete().eq('pedido_id', pedidoEmEdicaoId);
+  } else {
+    const { data: pedidoCriado, error: erroPedido } = await supabaseClient
+      .from('pedidos')
+      .insert({ ...dadosPedido, status: 'aberto' })
+      .select()
+      .single();
+
+    if (erroPedido){
+      btnRegistrar.disabled = false;
+      btnRegistrar.textContent = 'Registrar pedido';
+      mostrarToast('Não foi possível criar o pedido.', 'erro');
+      return;
+    }
+    pedidoId = pedidoCriado.id;
+    numeroVenda = pedidoCriado.numero_venda;
   }
 
   const itensComPedidoId = itensVendaAtual.map(item => ({
-    produto_id: item.produto_id, quantidade: item.quantidade, preco_unitario: item.preco_unitario, pedido_id: pedidoCriado.id,
+    produto_id: item.produto_id, quantidade: item.quantidade, preco_unitario: item.preco_unitario, pedido_id: pedidoId,
   }));
   const { error: erroItens } = await supabaseClient.from('pedido_itens').insert(itensComPedidoId);
 
   if (erroItens){
     btnRegistrar.disabled = false;
-    btnRegistrar.textContent = 'Registrar pedido';
-    mostrarToast('Pedido criado, mas houve erro ao salvar os itens.', 'erro');
+    btnRegistrar.textContent = pedidoEmEdicaoId ? 'Salvar alterações' : 'Registrar pedido';
+    mostrarToast('Pedido salvo, mas houve erro ao salvar os itens.', 'erro');
     carregarVendas();
     return;
   }
 
   if (itensEmbalagemVendaAtual.length > 0){
     const embalagensComPedidoId = itensEmbalagemVendaAtual.map(item => ({
-      embalagem_id: item.embalagem_id, quantidade: item.quantidade, pedido_id: pedidoCriado.id,
+      embalagem_id: item.embalagem_id, quantidade: item.quantidade, pedido_id: pedidoId,
     }));
     const { error: erroEmbalagens } = await supabaseClient.from('pedido_embalagens').insert(embalagensComPedidoId);
     if (erroEmbalagens){
-      mostrarToast('Pedido e itens criados, mas as embalagens não foram salvas.', 'erro');
+      mostrarToast('Pedido e itens salvos, mas as embalagens não foram salvas.', 'erro');
     }
   }
 
   btnRegistrar.disabled = false;
   btnRegistrar.textContent = 'Registrar pedido';
 
-  mostrarToast('Pedido registrado!');
+  const rotulo = numeroVenda != null ? `#${String(numeroVenda).padStart(4, '0')}` : '';
+  mostrarToast(pedidoEmEdicaoId ? `Pedido ${rotulo} atualizado!` : `Pedido ${rotulo} registrado!`);
   resetarFormularioNovaVenda();
   carregarVendas();
 });

@@ -249,8 +249,8 @@
 
     <div class="lista-cards" id="resumoVendas" style="margin-bottom:20px;"></div>
 
-    <div class="cartao-item" style="margin-bottom:24px;">
-      <div class="titulo-item"><span>Novo pedido</span></div>
+    <div class="cartao-item" id="cartaoNovoPedido" style="margin-bottom:24px;">
+      <div class="titulo-item"><span id="tituloNovoPedido">Novo pedido</span></div>
 
       <div class="form-linha-dupla" style="margin-top:10px;">
         <div class="form-grupo">
@@ -331,7 +331,25 @@
     </div>
 
     <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Pedidos registrados</h3>
-    <div class="lista-cards" id="listaVendas"></div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nº</th>
+              <th>Data do pedido</th>
+              <th>Cliente</th>
+              <th>Forma de pagamento</th>
+              <th>Valor do pedido</th>
+              <th>Valor final (com taxas)</th>
+              <th>Ações</th>
+              <th>Cancelar</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaVendas"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- FINANCEIRO -->

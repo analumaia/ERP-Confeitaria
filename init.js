@@ -43,7 +43,5 @@ modalForm.addEventListener('submit', async (evento) => {
 // --------------------------------------------------------
 montarAbas();
 carregarDashboard();
-document.getElementById('filtroMesFinanceiro').value = new Date().toISOString().slice(0, 7);
-document.getElementById('filtroMesFinanceiro').addEventListener('change', carregarFinanceiro);
 document.getElementById('filtroMesMetas').value = new Date().toISOString().slice(0, 7);
 document.getElementById('filtroMesMetas').addEventListener('change', carregarMetas);

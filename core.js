@@ -18,18 +18,18 @@ const supabaseClient = window.supabase.createClient(
 // --------------------------------------------------------
 // Abas do painel
 // --------------------------------------------------------
-const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'fichas', 'vendas', 'financeiro', 'insumos', 'embalagens', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
+const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'fichas', 'vendas', 'financeiro', 'caixa', 'insumos', 'embalagens', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
 
 // Estrutura do menu lateral: grupos com sub-itens (cada item, inclusive o grupo, abre uma tela)
 const MENU_LATERAL = [
   { chave: 'dashboard' },
   { chave: 'vendas', filhos: ['clientes', 'produtos'] },
   { chave: 'estoque', filhos: ['producao', 'fichas', 'compras', 'insumos', 'embalagens', 'fornecedores'] },
-  { chave: 'financeiro' },
+  { chave: 'financeiro', filhos: ['caixa'] },
   { chave: 'configuracoes' },
 ];
-const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', fichas: '📋', vendas: '💰', financeiro: '💵', insumos: '🌾', embalagens: '🎁', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
-const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', fichas: 'Fichas técnicas', vendas: 'Vendas', financeiro: 'Financeiro', insumos: 'Insumos', embalagens: 'Embalagens', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
+const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', fichas: '📋', vendas: '💰', financeiro: '💵', caixa: '🧾', insumos: '🌾', embalagens: '🎁', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
+const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', fichas: 'Fichas técnicas', vendas: 'Vendas', financeiro: 'Financeiro', caixa: 'Controle de caixa', insumos: 'Insumos', embalagens: 'Embalagens', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
 
 // --------------------------------------------------------
 // Estado compartilhado entre módulos
@@ -134,8 +134,11 @@ function trocarAba(chave){
     carregarClientes(); // fora de MODULOS — tela própria (form fixo + nº de compras)
   } else if (chave === 'vendas'){
     carregarVendas();
+  } else if (chave === 'caixa'){
+    carregarCaixa(); // ex-Financeiro: entradas e saídas da empresa
   } else if (chave === 'financeiro'){
-    carregarFinanceiro();
+    // reservado para novos recursos — sem carregamento por enquanto
+    // (precisa deste ramo pra não cair no carregamento genérico abaixo)
   } else if (chave === 'configuracoes'){
     carregarMetas();
     carregarFormasPagamento();

@@ -6,7 +6,7 @@
      3. Últimas produções e compras aguardando recebimento
      4. Financeiro estratégico (gráfico de 6 meses + 6 indicadores)
    O filtro "Período" é um mês; a comparação é sempre com o mês
-   anterior ao selecionado. Depende de limitesDoMes (financeiro.js)
+   anterior ao selecionado. Depende de limitesDoMes (caixa.js)
    e só LÊ dados dos outros módulos.
    ============================================================ */
 
@@ -302,13 +302,13 @@ async function carregarDashboard(){
         </div>
         ${cardKpi('Taxa de pagamento', atual.taxaMaquininha, anterior.taxaMaquininha, formatarMoeda, false)}
         ${cardKpi('Frete pago', atual.frete, anterior.frete, formatarMoeda, false)}
-        <div class="cartao-item kpi clicavel" data-ir-aba="financeiro" role="link" tabindex="0">
+        <div class="cartao-item kpi clicavel" data-ir-aba="caixa" role="link" tabindex="0">
           <div class="kpi-titulo">Outras despesas</div>
           <div class="kpi-valor">${formatarMoeda(despesasManuais)}</div>
-          <div class="item-sub">Lançamentos manuais em Financeiro.</div>
+          <div class="item-sub">Lançamentos manuais em Controle de caixa.</div>
         </div>
         <div class="cartao-item kpi">
-          <div class="kpi-titulo">Lucro estimado</div>
+          <div class="kpi-titulo">Lucro líquido estimado</div>
           <div class="kpi-valor" style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</div>
           <div class="item-sub">Margem bruta − outras despesas − taxa − frete.</div>
         </div>

@@ -352,18 +352,42 @@
     </div>
   </section>
 
-  <!-- FINANCEIRO -->
+  <!-- FINANCEIRO (reservado para novos recursos) -->
   <section class="conteudo-modulo" data-modulo="financeiro">
+    <div class="barra-modulo"><h2>Financeiro</h2></div>
+    <div class="lista-vazia">Área reservada para novos recursos financeiros. Por enquanto, use o Controle de caixa.</div>
+  </section>
+
+  <!-- CONTROLE DE CAIXA -->
+  <section class="conteudo-modulo" data-modulo="caixa">
+    <div class="barra-modulo"><h2>Controle de caixa</h2></div>
+
+    <div class="lista-cards" id="resumoCaixa" style="margin-bottom:16px;"></div>
+
     <div class="barra-modulo">
-      <h2>Financeiro</h2>
-      <input type="month" id="filtroMesFinanceiro" class="campo-busca" style="max-width:160px;">
+      <div style="display:flex; align-items:center; gap:10px; flex:1;">
+        <label for="filtroPeriodoCaixa" class="item-sub" style="white-space:nowrap;">Período:</label>
+        <input type="month" id="filtroPeriodoCaixa" class="campo-busca" style="max-width:200px;">
+      </div>
       <button class="btn-novo" id="btnNovoLancamento">+ Lançamento manual</button>
     </div>
 
-    <div class="lista-cards" id="resumoFinanceiro" style="margin-bottom:8px;"></div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Lançamentos do mês</h3>
-    <div class="lista-cards" id="listaLancamentos"></div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Categoria</th>
+              <th>Origem</th>
+              <th>Observação</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaCaixa"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- INSUMOS -->
@@ -703,7 +727,7 @@
 <script src="clientes.js"></script>
 <script src="producao.js"></script>
 <script src="vendas.js"></script>
-<script src="financeiro.js"></script>
+<script src="caixa.js"></script>
 <script src="configuracoes.js"></script>
 <script src="init.js"></script>
 </body>

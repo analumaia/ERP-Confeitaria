@@ -107,10 +107,12 @@ function renderizarVendas(pedidos){
         ? '<span class="badge-inativo">Cancelado</span>'
         : '<span class="badge-estoque-baixo">Em aberto</span>';
 
+    const botaoVer = `<button type="button" class="btn-acao" data-ver-venda="${pedido.id}">Ver</button>`;
     const acoesEdicao = pedido.status === 'aberto'
-      ? `<button type="button" class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar</button>
+      ? `${botaoVer}
+         <button type="button" class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar</button>
          <button type="button" class="btn-acao" data-editar-venda="${pedido.id}">Editar</button>`
-      : '—';
+      : botaoVer;
     const acaoCancelar = pedido.status !== 'cancelado'
       ? `<button type="button" class="btn-acao excluir" data-cancelar-venda="${pedido.id}">Cancelar</button>`
       : '—';
@@ -129,6 +131,9 @@ function renderizarVendas(pedidos){
     `;
   }).join('');
 
+  corpo.querySelectorAll('[data-ver-venda]').forEach(botao => {
+    botao.addEventListener('click', () => verDetalhesVenda(botao.dataset.verVenda));
+  });
   corpo.querySelectorAll('[data-confirmar-venda]').forEach(botao => {
     botao.addEventListener('click', () => confirmarVenda(botao.dataset.confirmarVenda));
   });
@@ -139,6 +144,74 @@ function renderizarVendas(pedidos){
     botao.addEventListener('click', () => cancelarPedido(botao.dataset.cancelarVenda));
   });
 }
+
+// Mostra tudo o que compõe o pedido — itens, embalagens, valores e status —
+// pra conferência. Funciona pra qualquer status (aberto, confirmado ou
+// cancelado), já que é só leitura: não altera nada.
+function verDetalhesVenda(id){
+  const pedido = (dadosCarregados.pedidos || []).find(p => String(p.id) === String(id));
+  if (!pedido) return;
+
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const valorItens = pedido.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
+  const desconto = Math.min(valorItens, Number(pedido.desconto || 0));
+  const valorPedido = valorItens - desconto;
+  const frete = Number(pedido.valor_frete || 0);
+  const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
+  const taxa = (valorPedido + frete) * (taxaPct / 100);
+  const valorFinal = valorPedido - taxa - frete;
+  const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
+
+  const badgeStatus = pedido.status === 'confirmado'
+    ? '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">Confirmado</span>'
+    : pedido.status === 'cancelado'
+      ? '<span class="badge-inativo">Cancelado</span>'
+      : '<span class="badge-estoque-baixo">Em aberto</span>';
+
+  const linhasItens = pedido.pedido_itens.map(item => `
+    <div class="linha-info"><span>${item.produtos ? item.produtos.nome : '(produto removido)'} — ${Number(item.quantidade).toLocaleString('pt-BR')} un.</span><span>${formatarMoeda(Number(item.quantidade) * Number(item.preco_unitario))}</span></div>
+  `).join('');
+
+  const linhasEmbalagens = (pedido.pedido_embalagens || []).length > 0
+    ? (pedido.pedido_embalagens || []).map(pe => `
+        <div class="linha-info"><span>${pe.embalagens ? pe.embalagens.nome : '(embalagem removida)'}</span><span>${Number(pe.quantidade).toLocaleString('pt-BR')} un.</span></div>
+      `).join('')
+    : '<div class="item-sub">Nenhuma embalagem neste pedido.</div>';
+
+  document.getElementById('tituloDetalhesVenda').textContent = `Pedido #${String(pedido.numero_venda).padStart(4, '0')}`;
+  document.getElementById('detalhesVendaConteudo').innerHTML = `
+    <div class="linha-info"><span>Status</span><span>${badgeStatus}</span></div>
+    <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
+    <div class="linha-info"><span>Cliente</span><span>${pedido.clientes ? pedido.clientes.nome : 'Sem cliente'}</span></div>
+    <div class="linha-info"><span>Forma de pagamento</span><span>${pedido.formas_pagamento ? pedido.formas_pagamento.nome : '—'}</span></div>
+    ${pedido.observacao ? `<div class="linha-info"><span>Observação</span><span>${pedido.observacao}</span></div>` : ''}
+
+    <div class="compra-secao-titulo">Itens do pedido</div>
+    ${linhasItens}
+
+    <div class="compra-secao-titulo">Embalagens usadas</div>
+    ${linhasEmbalagens}
+
+    <div class="cartao-item" style="background:var(--bege-claro); box-shadow:none; margin-top:12px;">
+      <div class="linha-info"><span>Total do pedido</span><span>${formatarMoeda(valorItens)}</span></div>
+      <div class="linha-info"><span>Desconto</span><span class="valor-saida">− ${formatarMoeda(desconto)}</span></div>
+      <div class="linha-info"><span>Frete</span><span class="valor-saida">− ${formatarMoeda(frete)}</span></div>
+      <div class="linha-info"><span>Taxa</span><span class="valor-saida">− ${formatarMoeda(taxa)}</span></div>
+      <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;"><span>Valor final</span><span>${formatarMoeda(valorFinal)}</span></div>
+    </div>
+  `;
+
+  document.getElementById('modalDetalhesVendaOverlay').classList.add('aberto');
+}
+
+document.getElementById('btnFecharDetalhesVenda').addEventListener('click', () => {
+  document.getElementById('modalDetalhesVendaOverlay').classList.remove('aberto');
+});
+document.getElementById('modalDetalhesVendaOverlay').addEventListener('click', (evento) => {
+  if (evento.target === document.getElementById('modalDetalhesVendaOverlay')){
+    evento.currentTarget.classList.remove('aberto');
+  }
+});
 
 async function confirmarVenda(id){
   const pedido = (dadosCarregados.pedidos || []).find(p => String(p.id) === String(id));

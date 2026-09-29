@@ -142,6 +142,7 @@ function trocarAba(chave){
   } else if (chave === 'configuracoes'){
     carregarMetas();
     carregarFormasPagamento();
+    carregarCategoriasFinanceiras();
   } else if (!dadosCarregados[chave]){
     carregarModulo(chave);
   }

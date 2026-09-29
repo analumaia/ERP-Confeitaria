@@ -33,8 +33,12 @@ modalForm.addEventListener('submit', async (evento) => {
     return;
   }
 
-  // nenhum modo específico bateu — é um cadastro genérico
-  // (insumos, produtos, fornecedores ou clientes)
+  if (modoModal.modo === 'categoria_financeira'){
+    await salvarNovaCategoriaFinanceira();
+    return;
+  }
+
+  // nenhum modo específico bateu — é um cadastro genérico (hoje só fornecedores)
   await salvarRegistroCadastro();
 });
 

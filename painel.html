@@ -364,6 +364,18 @@
 
     <div class="lista-cards" id="resumoCaixa" style="margin-bottom:16px;"></div>
 
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">DRE resumida</h3>
+    <div class="cartao-item relatorio-cadastro" style="margin-bottom:20px;">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes">
+          <tbody id="corpoDreCaixa"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Resumo por grupo</h3>
+    <div class="lista-cards" id="gradeResumosCaixa" style="margin-bottom:20px;"></div>
+
     <div class="barra-modulo">
       <div style="display:flex; align-items:center; gap:10px; flex:1;">
         <label for="filtroPeriodoCaixa" class="item-sub" style="white-space:nowrap;">Período:</label>
@@ -582,6 +594,28 @@
       <button class="btn-novo" id="btnNovaFormaPagamento">+ Nova forma de pagamento</button>
     </div>
     <div class="lista-cards" id="listaFormasPagamento"></div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Categorias financeiras</h3>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Usadas no Controle de caixa pra classificar entradas e saídas e montar a DRE resumida automaticamente.</p>
+    <div class="barra-modulo">
+      <button class="btn-novo" id="btnNovaCategoriaFinanceira">+ Nova categoria</button>
+    </div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Tipo</th>
+              <th>Grupo do DRE</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaCategoriasFinanceiras"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   </main>

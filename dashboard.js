@@ -116,7 +116,8 @@ async function carregarDashboard(){
 
   const margemBruta = atual.faturamento - atual.custoTotal;
   const margemPercentual = atual.faturamento > 0 ? (margemBruta / atual.faturamento) * 100 : 0;
-  const lucroLiquido = margemBruta - despesasManuais - atual.taxaMaquininha - atual.frete;
+  // frete é cobrado a mais do cliente (receita), não uma despesa do negócio — por isso soma aqui
+  const lucroLiquido = margemBruta - despesasManuais - atual.taxaMaquininha + atual.frete;
 
   // -------- top 10 produtos vendidos no período --------
   const ranking = {};
@@ -301,7 +302,7 @@ async function carregarDashboard(){
           <div class="linha-info"><span>Sobre o faturamento</span><span>${margemPercentual.toFixed(1)}%</span></div>
         </div>
         ${cardKpi('Taxa de pagamento', atual.taxaMaquininha, anterior.taxaMaquininha, formatarMoeda, false)}
-        ${cardKpi('Frete pago', atual.frete, anterior.frete, formatarMoeda, false)}
+        ${cardKpi('Frete cobrado', atual.frete, anterior.frete, formatarMoeda, true)}
         <div class="cartao-item kpi clicavel" data-ir-aba="caixa" role="link" tabindex="0">
           <div class="kpi-titulo">Outras despesas</div>
           <div class="kpi-valor">${formatarMoeda(despesasManuais)}</div>
@@ -310,7 +311,7 @@ async function carregarDashboard(){
         <div class="cartao-item kpi">
           <div class="kpi-titulo">Lucro líquido estimado</div>
           <div class="kpi-valor" style="color:${lucroLiquido >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(lucroLiquido)}</div>
-          <div class="item-sub">Margem bruta − outras despesas − taxa − frete.</div>
+          <div class="item-sub">Margem bruta − outras despesas − taxa + frete (frete é cobrado a mais do cliente).</div>
         </div>
       </div>
     </div>

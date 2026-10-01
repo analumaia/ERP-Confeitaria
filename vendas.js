@@ -46,7 +46,7 @@ function renderizarResumoVendas(pedidos){
   const abertos = pedidos.filter(p => p.status === 'aberto');
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  let faturamentoBruto = 0, deducoesTotais = 0;
+  let faturamentoBruto = 0, deducoesTotais = 0, freteTotal = 0;
   confirmados.forEach(p => {
     const totalPedido = p.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
     const desconto = Math.min(totalPedido, Number(p.desconto || 0));
@@ -54,10 +54,12 @@ function renderizarResumoVendas(pedidos){
     const frete = Number(p.valor_frete || 0);
     const taxaPct = p.formas_pagamento ? Number(p.formas_pagamento.taxa_percentual) : 0;
     faturamentoBruto += totalPedido;
-    // frete passa pela mesma maquininha, então entra na base da taxa também
-    deducoesTotais += desconto + (totalComDesconto + frete) * (taxaPct / 100) + frete;
+    freteTotal += frete;
+    // frete é cobrado a mais do cliente (soma na receita) — mas ainda passa
+    // pela maquininha junto com os itens, então entra na base da taxa também
+    deducoesTotais += desconto + (totalComDesconto + frete) * (taxaPct / 100);
   });
-  const recebidoLiquido = faturamentoBruto - deducoesTotais;
+  const recebidoLiquido = faturamentoBruto + freteTotal - deducoesTotais;
 
   document.getElementById('resumoVendas').innerHTML = `
     <div class="cartao-item">
@@ -75,7 +77,7 @@ function renderizarResumoVendas(pedidos){
     <div class="cartao-item">
       <div class="titulo-item"><span>Recebido líquido</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span class="valor-entrada">${formatarMoeda(recebidoLiquido)}</span></div>
-      <div class="linha-info"><span>Descontos + taxas + frete</span><span>${formatarMoeda(deducoesTotais)}</span></div>
+      <div class="linha-info"><span>Descontos + taxas</span><span>${formatarMoeda(deducoesTotais)}</span></div>
     </div>
   `;
 }
@@ -96,9 +98,9 @@ function renderizarVendas(pedidos){
     const valorPedido = valorItens - desconto;
     const frete = Number(pedido.valor_frete || 0);
     const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
-    // mesma fórmula do formulário/dashboard: frete passa pela maquininha, entra na base da taxa
+    // frete é cobrado a mais do cliente (soma), mas ainda entra na base da taxa (passa pela maquininha)
     const taxa = (valorPedido + frete) * (taxaPct / 100);
-    const valorFinal = valorPedido - taxa - frete;
+    const valorFinal = valorPedido + frete - taxa;
     const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
 
     const badgeStatus = pedido.status === 'confirmado'
@@ -159,7 +161,7 @@ function verDetalhesVenda(id){
   const frete = Number(pedido.valor_frete || 0);
   const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
   const taxa = (valorPedido + frete) * (taxaPct / 100);
-  const valorFinal = valorPedido - taxa - frete;
+  const valorFinal = valorPedido + frete - taxa;
   const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
 
   const badgeStatus = pedido.status === 'confirmado'
@@ -195,7 +197,7 @@ function verDetalhesVenda(id){
     <div class="cartao-item" style="background:var(--bege-claro); box-shadow:none; margin-top:12px;">
       <div class="linha-info"><span>Total do pedido</span><span>${formatarMoeda(valorItens)}</span></div>
       <div class="linha-info"><span>Desconto</span><span class="valor-saida">− ${formatarMoeda(desconto)}</span></div>
-      <div class="linha-info"><span>Frete</span><span class="valor-saida">− ${formatarMoeda(frete)}</span></div>
+      <div class="linha-info"><span>Frete</span><span class="valor-entrada">+ ${formatarMoeda(frete)}</span></div>
       <div class="linha-info"><span>Taxa</span><span class="valor-saida">− ${formatarMoeda(taxa)}</span></div>
       <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;"><span>Valor final</span><span>${formatarMoeda(valorFinal)}</span></div>
     </div>
@@ -369,14 +371,15 @@ function recalcularTotaisVendaAtual(){
   const opcaoForma = document.getElementById('campoFormaPagamentoVenda').selectedOptions[0];
   const taxaPct = opcaoForma ? Number(opcaoForma.dataset.taxa || 0) : 0;
   const frete = Number(document.getElementById('campoFreteVenda').value) || 0;
-  // frete passa pela mesma maquininha junto com os itens, então entra na base da taxa também
+  // frete é cobrado a mais do cliente (soma na receita), mas ainda entra
+  // na base da taxa — passa pela mesma maquininha junto com os itens
   const taxa = (totalComDesconto + frete) * (taxaPct / 100);
-  const liquido = totalComDesconto - taxa - frete;
+  const liquido = totalComDesconto + frete - taxa;
 
   document.getElementById('totalPedidoVenda').textContent = formatarMoeda(total);
   document.getElementById('descontoPedidoVenda').textContent = '− ' + formatarMoeda(desconto);
+  document.getElementById('fretePedidoVenda').textContent = '+ ' + formatarMoeda(frete);
   document.getElementById('taxaPedidoVenda').textContent = '− ' + formatarMoeda(taxa);
-  document.getElementById('fretePedidoVenda').textContent = '− ' + formatarMoeda(frete);
   document.getElementById('liquidoPedidoVenda').textContent = formatarMoeda(liquido);
 }
 

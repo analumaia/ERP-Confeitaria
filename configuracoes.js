@@ -105,7 +105,7 @@ async function salvarNovaMeta(){
   btnSalvar.textContent = 'Salvar';
 
   if (erro){
-    mostrarToast('Não foi possível salvar a meta.', 'erro');
+    mostrarToast(erro.message || 'Não foi possível salvar a meta.', 'erro');
     return;
   }
 
@@ -209,7 +209,7 @@ async function salvarNovaFormaPagamento(){
   btnSalvar.textContent = 'Salvar';
 
   if (erro){
-    mostrarToast('Não foi possível salvar.', 'erro');
+    mostrarToast(erro.message || 'Não foi possível salvar.', 'erro');
     return;
   }
 
@@ -317,7 +317,7 @@ async function salvarNovaCategoriaFinanceira(){
   btnSalvar.textContent = 'Salvar';
 
   if (erro){
-    mostrarToast('Não foi possível salvar a categoria.', 'erro');
+    mostrarToast(erro.message || 'Não foi possível salvar a categoria.', 'erro');
     return;
   }
 
@@ -336,3 +336,59 @@ async function excluirCategoriaFinanceira(id){
   mostrarToast('Categoria excluída.');
   carregarCategoriasFinanceiras();
 }
+
+// --------------------------------------------------------
+// IMPRESSÃO DE COMANDA (configuração singleton — uma linha só)
+// --------------------------------------------------------
+let configImpressaoId = null;
+
+async function carregarConfigImpressao(){
+  const { data, error } = await supabaseClient.from('configuracao_impressao').select('*').limit(1).single();
+
+  if (error || !data){
+    mostrarToast('Não foi possível carregar a configuração de impressão. Se ainda não rodou, execute o SQL migracao-config-impressao.sql no Supabase.', 'erro');
+    return;
+  }
+
+  configImpressaoId = data.id;
+  document.getElementById('campoNomeLojaImpressao').value = data.nome_loja || '';
+  document.getElementById('campoEnderecoLojaImpressao').value = data.endereco_loja || '';
+  document.getElementById('campoTelefoneLojaImpressao').value = data.telefone_loja || '';
+  document.getElementById('campoCnpjLojaImpressao').value = data.cnpj_loja || '';
+  document.getElementById('campoLarguraPapelImpressao').value = data.largura_papel || '80mm';
+  document.getElementById('campoMensagemRodapeImpressao').value = data.mensagem_rodape || '';
+  document.getElementById('campoAvisoNaoFiscalImpressao').checked = data.mostrar_aviso_nao_fiscal !== false;
+}
+
+document.getElementById('btnSalvarConfigImpressao').addEventListener('click', async () => {
+  if (!configImpressaoId){
+    mostrarToast('Configuração ainda não carregada — aguarde um instante e tente de novo.', 'erro');
+    return;
+  }
+
+  const dados = {
+    nome_loja: document.getElementById('campoNomeLojaImpressao').value.trim() || null,
+    endereco_loja: document.getElementById('campoEnderecoLojaImpressao').value.trim() || null,
+    telefone_loja: document.getElementById('campoTelefoneLojaImpressao').value.trim() || null,
+    cnpj_loja: document.getElementById('campoCnpjLojaImpressao').value.trim() || null,
+    largura_papel: document.getElementById('campoLarguraPapelImpressao').value,
+    mensagem_rodape: document.getElementById('campoMensagemRodapeImpressao').value.trim() || null,
+    mostrar_aviso_nao_fiscal: document.getElementById('campoAvisoNaoFiscalImpressao').checked,
+  };
+
+  const btn = document.getElementById('btnSalvarConfigImpressao');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('configuracao_impressao').update(dados).eq('id', configImpressaoId);
+
+  btn.disabled = false;
+  btn.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast(error.message || 'Não foi possível salvar.', 'erro');
+    return;
+  }
+
+  mostrarToast('Configuração de impressão atualizada!');
+});

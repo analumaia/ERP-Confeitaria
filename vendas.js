@@ -10,13 +10,15 @@ let embalagensParaVenda = [];
 let formasPagamentoParaVenda = [];
 let modoDescontoVenda = 'valor'; // 'valor' (R$) ou 'percentual' (%) — alternado pelo botão ao lado do campo
 let pedidoEmEdicaoId = null; // não-nulo enquanto o formulário está editando um pedido em aberto existente
+let pedidoEmVisualizacaoId = null; // pedido atualmente aberto no modal de detalhes
+let configImpressaoComandaCache = null; // cache da config de impressão (configuracao_impressao)
 
 async function carregarVendas(){
   const corpo = document.getElementById('corpoTabelaVendas');
   if (!dadosCarregados.pedidos) corpo.innerHTML = '<tr><td colspan="8" class="lista-vazia">Carregando...</td></tr>';
 
   const [respPedidos, respClientes, respProdutos, respEmbalagens, respFormas] = await Promise.all([
-    supabaseClient.from('pedidos').select('*, clientes(nome), formas_pagamento(nome, taxa_percentual), pedido_itens(id, produto_id, quantidade, preco_unitario, produtos(nome)), pedido_embalagens(id, embalagem_id, quantidade, embalagens(nome))').order('criado_em', { ascending: false }),
+    supabaseClient.from('pedidos').select('*, clientes(nome, telefone, rua, numero, bairro, cidade, uf), formas_pagamento(nome, taxa_percentual), pedido_itens(id, produto_id, quantidade, preco_unitario, produtos(nome)), pedido_embalagens(id, embalagem_id, quantidade, embalagens(nome))').order('criado_em', { ascending: false }),
     supabaseClient.from('clientes').select('*').order('nome'),
     supabaseClient.from('produtos').select('*').eq('ativo', true).order('nome'),
     supabaseClient.from('embalagens').select('*').order('nome'),
@@ -109,7 +111,8 @@ function renderizarVendas(pedidos){
         ? '<span class="badge-inativo">Cancelado</span>'
         : '<span class="badge-estoque-baixo">Em aberto</span>';
 
-    const botaoVer = `<button type="button" class="btn-acao" data-ver-venda="${pedido.id}">Ver</button>`;
+    const botaoVer = `<button type="button" class="btn-acao" data-ver-venda="${pedido.id}">Ver</button>
+      <button type="button" class="btn-acao" data-imprimir-venda="${pedido.id}">Imprimir</button>`;
     const acoesEdicao = pedido.status === 'aberto'
       ? `${botaoVer}
          <button type="button" class="btn-acao" data-confirmar-venda="${pedido.id}">Confirmar</button>
@@ -135,6 +138,9 @@ function renderizarVendas(pedidos){
 
   corpo.querySelectorAll('[data-ver-venda]').forEach(botao => {
     botao.addEventListener('click', () => verDetalhesVenda(botao.dataset.verVenda));
+  });
+  corpo.querySelectorAll('[data-imprimir-venda]').forEach(botao => {
+    botao.addEventListener('click', () => imprimirComanda(botao.dataset.imprimirVenda));
   });
   corpo.querySelectorAll('[data-confirmar-venda]').forEach(botao => {
     botao.addEventListener('click', () => confirmarVenda(botao.dataset.confirmarVenda));
@@ -203,11 +209,15 @@ function verDetalhesVenda(id){
     </div>
   `;
 
+  pedidoEmVisualizacaoId = pedido.id;
   document.getElementById('modalDetalhesVendaOverlay').classList.add('aberto');
 }
 
 document.getElementById('btnFecharDetalhesVenda').addEventListener('click', () => {
   document.getElementById('modalDetalhesVendaOverlay').classList.remove('aberto');
+});
+document.getElementById('btnImprimirComandaDetalhes').addEventListener('click', () => {
+  if (pedidoEmVisualizacaoId) imprimirComanda(pedidoEmVisualizacaoId);
 });
 document.getElementById('modalDetalhesVendaOverlay').addEventListener('click', (evento) => {
   if (evento.target === document.getElementById('modalDetalhesVendaOverlay')){
@@ -556,3 +566,124 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
   resetarFormularioNovaVenda();
   carregarVendas();
 });
+
+// --------------------------------------------------------
+// IMPRESSÃO DE COMANDA — não é documento fiscal, é só o papel que
+// vai pra cozinha/entregador com o que foi pedido. Formato e
+// tamanho do papel vêm de Configurações (tabela
+// configuracao_impressao); aqui só monta o HTML e manda imprimir.
+// --------------------------------------------------------
+async function obterConfigImpressaoComanda(){
+  if (configImpressaoComandaCache) return configImpressaoComandaCache;
+
+  const { data, error } = await supabaseClient.from('configuracao_impressao').select('*').limit(1).single();
+  if (error || !data){
+    // ainda não rodou a migração, ou a linha singleton sumiu — segue com
+    // um padrão razoável em vez de travar a impressão
+    configImpressaoComandaCache = { largura_papel: '80mm', nome_loja: '', endereco_loja: '', telefone_loja: '', cnpj_loja: '', mensagem_rodape: '', mostrar_aviso_nao_fiscal: true };
+  } else {
+    configImpressaoComandaCache = data;
+  }
+  return configImpressaoComandaCache;
+}
+
+function montarHtmlComanda(pedido, config){
+  const m = v => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const agora = new Date().toLocaleString('pt-BR');
+  const aberturaFormatada = pedido.criado_em ? new Date(pedido.criado_em).toLocaleString('pt-BR') : new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
+  const numero = String(pedido.numero_venda).padStart(3, '0');
+
+  const valorItens = pedido.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
+  const desconto = Math.min(valorItens, Number(pedido.desconto || 0));
+  const frete = Number(pedido.valor_frete || 0);
+  const totalAPagar = valorItens - desconto + frete;
+
+  const linhasItens = pedido.pedido_itens.map(item => {
+    const nome = item.produtos ? item.produtos.nome : '(produto removido)';
+    const subtotal = Number(item.quantidade) * Number(item.preco_unitario);
+    return `<tr><td>${item.quantidade} ${nome} (${m(item.preco_unitario)})</td><td class="valor">${m(subtotal)}</td></tr>`;
+  }).join('');
+
+  const cliente = pedido.clientes;
+  const temEndereco = cliente && (cliente.rua || cliente.bairro || cliente.cidade);
+  const blocoEndereco = temEndereco ? `
+    <div>(Entregar no endereço)</div>
+    <div>${cliente.rua || ''}${cliente.numero ? ', ' + cliente.numero : ''}</div>
+    <div>${cliente.bairro || ''}${cliente.cidade ? ' - ' + cliente.cidade : ''}${cliente.uf ? '/' + cliente.uf : ''}</div>
+  ` : '';
+
+  const largura = config.largura_papel || '80mm';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Comanda ${numero}</title>
+<style>
+  @page { size: ${largura} auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body { width: ${largura}; margin: 0 auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; }
+  .centro { text-align: center; }
+  .negrito { font-weight: bold; }
+  .linha { border-top: 1px dashed #000; margin: 5px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 1px 0; vertical-align: top; }
+  .valor { text-align: right; white-space: nowrap; }
+  .totais td { font-weight: bold; padding-top: 2px; }
+</style>
+</head>
+<body>
+  ${config.nome_loja ? `<div class="centro negrito" style="font-size:13px;">${config.nome_loja}</div>` : ''}
+  ${config.endereco_loja ? `<div class="centro">${config.endereco_loja}</div>` : ''}
+  ${config.telefone_loja ? `<div class="centro">${config.telefone_loja}</div>` : ''}
+  ${config.cnpj_loja ? `<div class="centro">CNPJ: ${config.cnpj_loja}</div>` : ''}
+  <div class="centro">IMPRESSO EM ${agora}</div>
+  ${config.mostrar_aviso_nao_fiscal ? '<div class="centro negrito">*** NAO E DOCUMENTO FISCAL ***</div>' : ''}
+  <div class="linha"></div>
+
+  <div class="negrito">${cliente ? cliente.nome : 'Sem cliente'}</div>
+  ${cliente && cliente.telefone ? `<div>${cliente.telefone}</div>` : ''}
+  ${blocoEndereco}
+  <div class="linha"></div>
+
+  <div>ABERTO EM ${aberturaFormatada}</div>
+  <div>(Pedido Nº: ${numero})</div>
+  <div class="linha"></div>
+
+  <table>
+    <tr><td class="negrito">ITEM (V.Unit)</td><td class="valor negrito">Total</td></tr>
+    ${linhasItens}
+  </table>
+  <div class="linha"></div>
+
+  <table class="totais">
+    <tr><td>TOTAL:</td><td class="valor">${m(valorItens)}</td></tr>
+    ${desconto > 0 ? `<tr><td>- DESCONTO:</td><td class="valor">${m(desconto)}</td></tr>` : ''}
+    ${frete > 0 ? `<tr><td>+ ENTREGA:</td><td class="valor">${m(frete)}</td></tr>` : ''}
+    <tr><td>= TOTAL A PAGAR:</td><td class="valor">${m(totalAPagar)}</td></tr>
+  </table>
+
+  ${pedido.observacao ? `<div class="linha"></div><div>Obs: ${pedido.observacao}</div>` : ''}
+  ${config.mensagem_rodape ? `<div class="linha"></div><div class="centro">${config.mensagem_rodape.replace(/\n/g, '<br>')}</div>` : ''}
+</body>
+</html>`;
+}
+
+async function imprimirComanda(id){
+  const pedido = (dadosCarregados.pedidos || []).find(p => String(p.id) === String(id));
+  if (!pedido) return;
+
+  const config = await obterConfigImpressaoComanda();
+  const html = montarHtmlComanda(pedido, config);
+
+  const janela = window.open('', '_blank', 'width=400,height=600');
+  if (!janela){
+    mostrarToast('Não foi possível abrir a janela de impressão — verifique se o navegador bloqueou pop-ups.', 'erro');
+    return;
+  }
+  janela.document.write(html);
+  janela.document.close();
+  janela.focus();
+  // pequeno atraso pra garantir que o conteúdo renderizou antes do print
+  setTimeout(() => janela.print(), 300);
+}

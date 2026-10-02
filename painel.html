@@ -616,6 +616,47 @@
         </table>
       </div>
     </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Impressão de comanda</h3>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Controla o cabeçalho, o rodapé e o tamanho do papel usados ao imprimir a comanda de um pedido em Vendas.</p>
+    <div class="cartao-item">
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoNomeLojaImpressao">Nome da loja</label>
+          <input type="text" id="campoNomeLojaImpressao" placeholder="Bakeria Confeitaria Artesanal">
+        </div>
+        <div class="form-grupo">
+          <label for="campoTelefoneLojaImpressao">Telefone</label>
+          <input type="text" id="campoTelefoneLojaImpressao" placeholder="(00) 00000-0000">
+        </div>
+      </div>
+      <div class="form-grupo">
+        <label for="campoEnderecoLojaImpressao">Endereço</label>
+        <input type="text" id="campoEnderecoLojaImpressao" placeholder="Rua, número, bairro, cidade">
+      </div>
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoCnpjLojaImpressao">CNPJ (opcional)</label>
+          <input type="text" id="campoCnpjLojaImpressao" placeholder="00.000.000/0001-00">
+        </div>
+        <div class="form-grupo">
+          <label for="campoLarguraPapelImpressao">Tamanho do papel</label>
+          <select id="campoLarguraPapelImpressao">
+            <option value="58mm">58mm (térmica pequena)</option>
+            <option value="80mm">80mm (térmica padrão)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grupo">
+        <label for="campoMensagemRodapeImpressao">Mensagem de rodapé (opcional)</label>
+        <textarea id="campoMensagemRodapeImpressao" rows="3" placeholder="Ex.: Junte 10 carimbos e troque por um item grátis na próxima compra!" style="width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--marrom-claro); font-family:inherit; font-size:0.92rem; resize:vertical;"></textarea>
+      </div>
+      <label class="form-checkbox">
+        <input type="checkbox" id="campoAvisoNaoFiscalImpressao" checked>
+        Mostrar aviso "NÃO É DOCUMENTO FISCAL" no topo da comanda
+      </label>
+      <button type="button" class="btn-primario" id="btnSalvarConfigImpressao" style="margin-top:14px;">Salvar</button>
+    </div>
   </section>
 
   </main>
@@ -750,6 +791,7 @@
     <h3 id="tituloDetalhesVenda">Detalhes do pedido</h3>
     <div id="detalhesVendaConteudo"></div>
     <div class="acoes-modal">
+      <button type="button" class="btn-secundario" id="btnImprimirComandaDetalhes" style="width:100%;">Imprimir comanda</button>
       <button type="button" class="btn-primario" id="btnFecharDetalhesVenda" style="width:100%;">Fechar</button>
     </div>
   </div>

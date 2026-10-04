@@ -72,8 +72,8 @@ function renderizarTabelaProdutos(){
 
   corpo.innerHTML = produtos.map(produto => `
     <tr>
-      <td class="celula-principal">${produto.nome}${produto.sku ? `<span class="item-sub">SKU: ${produto.sku}</span>` : ''}</td>
-      <td>${produto.categoria || '—'}</td>
+      <td class="celula-principal">${esc(produto.nome)}${produto.sku ? `<span class="item-sub">SKU: ${esc(produto.sku)}</span>` : ''}</td>
+      <td>${esc(produto.categoria) || '—'}</td>
       <td>${produto.preco_venda != null ? moedaProduto(Number(produto.preco_venda)) : '—'}</td>
       <td>${moedaProduto(custoUnitarioProduto(produto))}</td>
       <td>${produto.estoque_minimo != null ? Number(produto.estoque_minimo).toLocaleString('pt-BR') : '—'}</td>
@@ -103,8 +103,8 @@ document.getElementById('btnNovoProduto').addEventListener('click', () => abrirM
 // insumo direto, escolhidos no mesmo combo (agrupado).
 // --------------------------------------------------------
 function opcoesComposicaoHtml(selecionado){
-  const grupoFichas = fichasParaProduto.map(f => `<option value="ficha:${f.id}"${selecionado === `ficha:${f.id}` ? ' selected' : ''}>${f.nome}</option>`).join('');
-  const grupoInsumos = insumosParaProduto.map(i => `<option value="insumo:${i.id}"${selecionado === `insumo:${i.id}` ? ' selected' : ''}>${i.nome} (${i.unidade_medida})${i.ativo === false ? ' — inativo' : ''}</option>`).join('');
+  const grupoFichas = fichasParaProduto.map(f => `<option value="ficha:${f.id}"${selecionado === `ficha:${f.id}` ? ' selected' : ''}>${esc(f.nome)}</option>`).join('');
+  const grupoInsumos = insumosParaProduto.map(i => `<option value="insumo:${i.id}"${selecionado === `insumo:${i.id}` ? ' selected' : ''}>${esc(i.nome)} (${esc(i.unidade_medida)})${i.ativo === false ? ' — inativo' : ''}</option>`).join('');
   return `<option value="">Ficha técnica ou insumo...</option>` +
     (grupoFichas ? `<optgroup label="Fichas técnicas">${grupoFichas}</optgroup>` : '') +
     (grupoInsumos ? `<optgroup label="Insumos">${grupoInsumos}</optgroup>` : '');

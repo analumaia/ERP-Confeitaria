@@ -7,7 +7,7 @@
 // METAS
 // --------------------------------------------------------
 async function carregarMetas(){
-  const mesAno = document.getElementById('filtroMesMetas').value || new Date().toISOString().slice(0, 7);
+  const mesAno = document.getElementById('filtroMesMetas').value || mesAtualISO();
   const container = document.getElementById('listaMetas');
   container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
@@ -26,7 +26,7 @@ async function carregarMetas(){
   const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   container.innerHTML = data.map(m => `
     <div class="cartao-item">
-      <div class="titulo-item"><span>${m.nome}</span></div>
+      <div class="titulo-item"><span>${esc(m.nome)}</span></div>
       <div class="linha-info"><span>Meta de faturamento</span><span>${formatarMoeda(Number(m.valor_meta))}</span></div>
       <div class="acoes-item">
         <button class="btn-acao" data-editar-meta="${m.id}">Editar</button>
@@ -58,12 +58,12 @@ async function excluirMeta(id){
 
 function abrirModalMeta(metaExistente){
   modoModal = { modo: 'meta', id: metaExistente ? metaExistente.id : null };
-  const mesAtual = document.getElementById('filtroMesMetas').value || new Date().toISOString().slice(0, 7);
+  const mesAtual = document.getElementById('filtroMesMetas').value || mesAtualISO();
   modalTitulo.textContent = metaExistente ? 'Editar meta mensal' : 'Nova meta mensal';
   modalCampos.innerHTML = `
     <div class="form-grupo">
       <label for="campoNomeMeta">Nome da meta</label>
-      <input type="text" id="campoNomeMeta" placeholder="Ex: Otimista, Realista, Meta do mês..." value="${metaExistente ? metaExistente.nome : 'Meta do mês'}">
+      <input type="text" id="campoNomeMeta" placeholder="Ex: Otimista, Realista, Meta do mês..." value="${metaExistente ? esc(metaExistente.nome) : 'Meta do mês'}">
     </div>
     <div class="form-grupo">
       <label for="campoMesMeta">Mês</label>
@@ -138,7 +138,7 @@ async function carregarFormasPagamento(){
 
   container.innerHTML = data.map(f => `
     <div class="cartao-item">
-      <div class="titulo-item"><span>${f.nome}</span></div>
+      <div class="titulo-item"><span>${esc(f.nome)}</span></div>
       <div class="linha-info"><span>Taxa</span><span>${Number(f.taxa_percentual).toLocaleString('pt-BR')}%</span></div>
       <div class="acoes-item">
         <button class="btn-acao" data-editar-forma="${f.id}">Editar</button>
@@ -172,7 +172,7 @@ function abrirModalFormaPagamento(formaExistente){
   modalCampos.innerHTML = `
     <div class="form-grupo">
       <label for="campoNomeForma">Nome</label>
-      <input type="text" id="campoNomeForma" placeholder="Ex: Pix, Cartão de crédito, Dinheiro..." value="${formaExistente ? formaExistente.nome : ''}">
+      <input type="text" id="campoNomeForma" placeholder="Ex: Pix, Cartão de crédito, Dinheiro..." value="${formaExistente ? esc(formaExistente.nome) : ''}">
     </div>
     <div class="form-grupo">
       <label for="campoTaxaForma">Taxa cobrada (%)</label>
@@ -246,7 +246,7 @@ async function carregarCategoriasFinanceiras(){
 
   corpo.innerHTML = data.map(c => `
     <tr>
-      <td class="celula-principal">${c.nome}</td>
+      <td class="celula-principal">${esc(c.nome)}</td>
       <td>${c.tipo === 'entrada' ? 'Entrada' : 'Saída'}</td>
       <td>${rotuloGrupoDre(c.grupo_dre)}</td>
       <td><button type="button" class="btn-acao" data-editar-categoria-financeira="${c.id}">Editar</button></td>
@@ -272,7 +272,7 @@ function abrirModalCategoriaFinanceira(categoriaExistente){
   modalCampos.innerHTML = `
     <div class="form-grupo">
       <label for="campoNomeCategoriaFinanceira">Nome</label>
-      <input type="text" id="campoNomeCategoriaFinanceira" placeholder="Ex: Aluguel, Comissão, Venda de produto..." value="${categoriaExistente ? categoriaExistente.nome : ''}">
+      <input type="text" id="campoNomeCategoriaFinanceira" placeholder="Ex: Aluguel, Comissão, Venda de produto..." value="${categoriaExistente ? esc(categoriaExistente.nome) : ''}">
     </div>
     <div class="form-grupo">
       <label for="campoTipoCategoriaFinanceira">Tipo</label>

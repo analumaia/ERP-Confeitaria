@@ -32,7 +32,7 @@ document.getElementById('filtroMesDashboard').addEventListener('change', carrega
 async function carregarDashboard(){
   const container = document.getElementById('listaDashboard');
   const campoMes = document.getElementById('filtroMesDashboard');
-  if (!campoMes.value) campoMes.value = mesAnoLocal(new Date());
+  if (!campoMes.value) campoMes.value = mesAtualISO();
   const mesSelecionado = campoMes.value;
   const requisicao = ++dashboardRequisicao;
 
@@ -147,7 +147,7 @@ async function carregarDashboard(){
   const totalComprasAbertas = comprasAbertas.reduce((s, c) => s + c.compra_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.custo_unitario), 0), 0);
 
   // -------- meta: valor (faturamento / meta) e prazo (dias decorridos do mês) --------
-  const hoje = new Date();
+  const hoje = agoraBrasilia();
   const [anoSel, mesSel] = mesSelecionado.split('-').map(Number);
   const diasNoMes = new Date(anoSel, mesSel, 0).getDate();
   const mesDeHoje = mesAnoLocal(hoje);
@@ -211,7 +211,7 @@ async function carregarDashboard(){
     ? `<div class="meta-faixa" data-ir-aba="configuracoes" role="link" tabindex="0"><div class="dash-vazio" style="padding:0;">Nenhuma meta para este mês — cadastre em Configurações.</div></div>`
     : `<div class="meta-faixa">${respMetas.data.map(meta => `
         <div class="meta-linha">
-          <div class="meta-nome">${meta.nome}</div>
+          <div class="meta-nome">${esc(meta.nome)}</div>
           ${barraProgresso('Faturamento: ' + formatarMoeda(atual.faturamento) + ' de ' + formatarMoeda(Number(meta.valor_meta)), (atual.faturamento / Number(meta.valor_meta)) * 100, 'var(--verde)')}
           ${barraProgresso('Prazo do mês', percentualPrazo, 'var(--rosa)')}
         </div>
@@ -239,21 +239,21 @@ async function carregarDashboard(){
         <div class="titulo-item"><span>Top 10 produtos vendidos</span></div>
         <div class="lista-rolavel">
           ${top10Produtos.length === 0 ? vazio('Nenhuma venda confirmada neste período.') : top10Produtos.map(([nome, d], i) => `
-            <div class="linha-info"><span>${i + 1}. ${nome}</span><span>${formatarNum(d.quantidade)} un. — ${formatarMoeda(d.valor)}</span></div>`).join('')}
+            <div class="linha-info"><span>${i + 1}. ${esc(nome)}</span><span>${formatarNum(d.quantidade)} un. — ${formatarMoeda(d.valor)}</span></div>`).join('')}
         </div>
       </div>
       <div class="cartao-item dash-lista clicavel" data-ir-aba="produtos" role="link" tabindex="0">
         <div class="titulo-item"><span>Produtos abaixo do estoque mínimo</span>${badge(produtosAbaixo.length)}</div>
         <div class="lista-rolavel">
           ${produtosAbaixo.length === 0 ? vazio('Tudo certo por aqui.') : produtosAbaixo.map(p => `
-            <div class="linha-info"><span>${p.nome}</span><span>${formatarNum(p.saldo)} de ${formatarNum(Number(p.minimo))} ${p.unidade}</span></div>`).join('')}
+            <div class="linha-info"><span>${esc(p.nome)}</span><span>${formatarNum(p.saldo)} de ${formatarNum(Number(p.minimo))} ${esc(p.unidade)}</span></div>`).join('')}
         </div>
       </div>
       <div class="cartao-item dash-lista clicavel" data-ir-aba="estoque" role="link" tabindex="0">
         <div class="titulo-item"><span>Insumos abaixo do mínimo</span>${badge(insumosAbaixo.length)}</div>
         <div class="lista-rolavel">
           ${insumosAbaixo.length === 0 ? vazio('Tudo certo por aqui.') : insumosAbaixo.map(i => `
-            <div class="linha-info"><span>${i.nome}</span><span>${formatarNum(i.saldo)} de ${formatarNum(Number(i.minimo))} ${i.unidade}</span></div>`).join('')}
+            <div class="linha-info"><span>${esc(i.nome)}</span><span>${formatarNum(i.saldo)} de ${formatarNum(Number(i.minimo))} ${esc(i.unidade)}</span></div>`).join('')}
         </div>
       </div>
     </div>
@@ -265,8 +265,8 @@ async function carregarDashboard(){
         <div class="lista-rolavel">
           ${(respUltimasProducoes.data || []).length === 0 ? vazio('Nenhuma produção registrada ainda.') : respUltimasProducoes.data.map(p => `
             <div class="item-lista">
-              <div class="linha-info"><span>${p.produtos ? p.produtos.nome : '(produto removido)'}</span><span>${formatarNum(Number(p.quantidade_produzida))} un.</span></div>
-              <div class="item-sub">${new Date(p.data_producao + 'T00:00:00').toLocaleDateString('pt-BR')}${p.observacao ? ' — ' + p.observacao : ''}</div>
+              <div class="linha-info"><span>${p.produtos ? esc(p.produtos.nome) : '(produto removido)'}</span><span>${formatarNum(Number(p.quantidade_produzida))} un.</span></div>
+              <div class="item-sub">${new Date(p.data_producao + 'T00:00:00').toLocaleDateString('pt-BR')}${p.observacao ? ' — ' + esc(p.observacao) : ''}</div>
             </div>`).join('')}
         </div>
       </div>
@@ -277,7 +277,7 @@ async function carregarDashboard(){
             const total = c.compra_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.custo_unitario), 0);
             return `
             <div class="item-lista">
-              <div class="linha-info"><span>${c.fornecedores ? c.fornecedores.nome : 'Fornecedor não informado'}</span><span>${formatarMoeda(total)}</span></div>
+              <div class="linha-info"><span>${c.fornecedores ? esc(c.fornecedores.nome) : 'Fornecedor não informado'}</span><span>${formatarMoeda(total)}</span></div>
               <div class="item-sub">Pedido em ${new Date(c.data_compra + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
             </div>`;
           }).join('')}

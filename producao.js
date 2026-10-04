@@ -70,8 +70,8 @@ async function carregarProducao(){
 
 function montarComboItemProducao(fichas, produtos){
   const selecionado = campoItemProducao.value;
-  const grupoFichas = fichas.map(f => `<option value="ficha:${f.id}">${f.nome}</option>`).join('');
-  const grupoProdutos = produtos.map(p => `<option value="produto:${p.id}">${p.nome}</option>`).join('');
+  const grupoFichas = fichas.map(f => `<option value="ficha:${f.id}">${esc(f.nome)}</option>`).join('');
+  const grupoProdutos = produtos.map(p => `<option value="produto:${p.id}">${esc(p.nome)}</option>`).join('');
   campoItemProducao.innerHTML = '<option value="">Selecione...</option>' +
     (grupoFichas ? `<optgroup label="Fichas técnicas">${grupoFichas}</optgroup>` : '') +
     (grupoProdutos ? `<optgroup label="Produtos (pronta entrega)">${grupoProdutos}</optgroup>` : '');
@@ -88,7 +88,7 @@ function renderizarEstoqueFichas(fichas){
     const saldo = saldoDeRelacao(f.estoque_fichas); // helper já existe em estoque.js
     return `
       <div class="mini-kpi">
-        <div class="kpi-titulo">${f.nome}</div>
+        <div class="kpi-titulo">${esc(f.nome)}</div>
         <div class="mini-kpi-valor${saldo < 0 ? ' valor-saida' : ''}">${numeroProducao(saldo)} ${f.rendimento_unidade || ''}</div>
       </div>
     `;
@@ -106,10 +106,10 @@ function renderizarHistoricoProducoes(producoes){
     const rotulo = p.tipo === 'ficha' ? 'Ficha técnica' : 'Produto pronto';
     return `
       <div class="cartao-item">
-        <div class="titulo-item"><span>${p.nome}</span><span class="item-sub">${rotulo}</span></div>
+        <div class="titulo-item"><span>${esc(p.nome)}</span><span class="item-sub">${rotulo}</span></div>
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
         <div class="linha-info"><span>Quantidade produzida</span><span>${numeroProducao(p.quantidade)} ${p.unidade}</span></div>
-        ${p.observacao ? `<div class="linha-info"><span>Obs.</span><span>${p.observacao}</span></div>` : ''}
+        ${p.observacao ? `<div class="linha-info"><span>Obs.</span><span>${esc(p.observacao)}</span></div>` : ''}
       </div>
     `;
   }).join('');
@@ -121,7 +121,7 @@ function renderizarHistoricoProducoes(producoes){
 function resetarFormularioProducao(){
   campoItemProducao.value = '';
   campoQuantidadeProducao.value = '';
-  campoDataProducao.value = dataLocalISO(new Date()); // helper já existe em estoque.js
+  campoDataProducao.value = hojeISO();
   campoObservacaoProducao.value = '';
 }
 

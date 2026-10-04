@@ -46,7 +46,7 @@ function formatarValor(registro, infoCampo){
   if (infoCampo.formato === 'moeda'){
     return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 6 });
   }
-  return valor + (infoCampo.sufixo || '');
+  return esc(valor + (infoCampo.sufixo || ''));
 }
 
 // --------------------------------------------------------
@@ -107,7 +107,7 @@ function renderizarLista(chave){
     return `
       <div class="cartao-item">
         <div class="titulo-item">
-          <span>${registro[config.tituloCampo]}</span>
+          <span>${esc(registro[config.tituloCampo])}</span>
           ${badges}
         </div>
         ${linhas}
@@ -142,7 +142,7 @@ function renderizarTabelaGenerica(chave, config, registros){
 
   corpo.innerHTML = registros.map(registro => `
     <tr>
-      <td class="celula-principal">${registro[config.tituloCampo]}</td>
+      <td class="celula-principal">${esc(registro[config.tituloCampo])}</td>
       ${config.infoCampos.map(info => `<td>${formatarValor(registro, info)}</td>`).join('')}
       <td><button type="button" class="btn-acao" data-editar="${chave}" data-id="${registro.id}">Editar</button></td>
       <td><button type="button" class="btn-acao excluir" data-excluir="${chave}" data-id="${registro.id}">Excluir</button></td>
@@ -193,7 +193,7 @@ function abrirModal(chave, id){
         ${campo.passo ? `step="${campo.passo}"` : ''}
         placeholder="${config.modalSemLabel ? campo.label + (campo.obrigatorio ? ' *' : '') : (campo.placeholder || '')}"
         ${campo.obrigatorio ? 'required' : ''}
-        value="${registro && registro[campo.chave] != null ? registro[campo.chave] : ''}"
+        value="${esc(registro && registro[campo.chave] != null ? registro[campo.chave] : '')}"
       >
     </div>
   `).join('') + (config.temAtivo ? `

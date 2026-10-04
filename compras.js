@@ -81,8 +81,8 @@ async function carregarCompras(){
 // O <select> de cada linha guarda "insumo:<id>" ou "embalagem:<id>" —
 // o mesmo padrão usado no combo de Produção (ficha/produto).
 function opcoesItemCompraHtml(){
-  const grupoInsumos = insumosAtivosCompra.map(i => `<option value="insumo:${i.id}">${i.nome} (${i.unidade_medida})</option>`).join('');
-  const grupoEmbalagens = embalagensCompra.map(e => `<option value="embalagem:${e.id}">${e.nome}${e.dimensoes ? ' — ' + e.dimensoes : ''}</option>`).join('');
+  const grupoInsumos = insumosAtivosCompra.map(i => `<option value="insumo:${i.id}">${esc(i.nome)} (${esc(i.unidade_medida)})</option>`).join('');
+  const grupoEmbalagens = embalagensCompra.map(e => `<option value="embalagem:${e.id}">${esc(e.nome)}${e.dimensoes ? ' — ' + esc(e.dimensoes) : ''}</option>`).join('');
   return '<option value="">Selecione o item...</option>' +
     (grupoInsumos ? `<optgroup label="Insumos">${grupoInsumos}</optgroup>` : '') +
     (grupoEmbalagens ? `<optgroup label="Embalagens">${grupoEmbalagens}</optgroup>` : '');
@@ -103,7 +103,7 @@ function adicionarLinhaItemCompra(){
 function atualizarOpcoesFormularioCompra(){
   const fornecedorEscolhido = campoFornecedorCompra.value;
   campoFornecedorCompra.innerHTML = '<option value="">Selecione o fornecedor...</option>' +
-    fornecedoresCompra.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+    fornecedoresCompra.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('');
   campoFornecedorCompra.value = fornecedorEscolhido;
 
   const opcoes = opcoesItemCompraHtml();
@@ -138,7 +138,7 @@ function recalcularTotalCompra(){
 
 function resetarFormularioCompra(){
   campoFornecedorCompra.value = '';
-  campoDataCompra.value = dataLocalISO(new Date());
+  campoDataCompra.value = hojeISO();
   campoFreteCompra.value = 0;
   itensCompra.innerHTML = '';
   adicionarLinhaItemCompra();
@@ -253,7 +253,7 @@ async function salvarNovaCompra(){
 // Relatório (direita): filtro de período + resumo + lista
 // --------------------------------------------------------
 function definirPeriodoCompras(tipo){
-  const hoje = new Date();
+  const hoje = agoraBrasilia();
   let de = '', ate = '';
   if (tipo === 'mes'){
     de = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
@@ -320,7 +320,7 @@ function renderizarRelatorioCompras(){
       const nome = item.insumos ? item.insumos.nome : (item.embalagens ? item.embalagens.nome : '(item removido)');
       const unidade = item.insumos ? item.insumos.unidade_medida : 'un';
       return `
-        <div class="linha-info"><span>${nome}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${unidade} × ${moedaUnitaria(Number(item.custo_unitario))}</span></div>
+        <div class="linha-info"><span>${esc(nome)}</span><span>${Number(item.quantidade).toLocaleString('pt-BR')} ${unidade} × ${moedaUnitaria(Number(item.custo_unitario))}</span></div>
         ${frete > 0 && Number(item.custo_unitario) > 0 ? `<div class="item-sub">custo com frete rateado: ${moedaUnitaria(Number(item.custo_unitario) + fretesUnitarios[i])} por ${unidade}</div>` : ''}
       `;
     }).join('');
@@ -328,7 +328,7 @@ function renderizarRelatorioCompras(){
     return `
       <div class="compra-item">
         <div class="titulo-item">
-          <span>${compra.fornecedores ? compra.fornecedores.nome : 'Fornecedor não informado'}</span>
+          <span>${compra.fornecedores ? esc(compra.fornecedores.nome) : 'Fornecedor não informado'}</span>
           ${recebida ? '<span class="badge-inativo" style="background:var(--verde-bg); color:var(--verde);">Recebida</span>' : '<span class="badge-estoque-baixo">Pedido em aberto</span>'}
         </div>
         <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>

@@ -126,8 +126,8 @@ function renderizarVendas(pedidos){
       <tr>
         <td class="celula-principal">${formatarNumeroVenda(pedido.numero_venda)}</td>
         <td>${dataFormatada}<br>${badgeStatus}</td>
-        <td>${pedido.clientes ? pedido.clientes.nome : 'Sem cliente'}</td>
-        <td>${pedido.formas_pagamento ? pedido.formas_pagamento.nome : '—'}</td>
+        <td>${pedido.clientes ? esc(pedido.clientes.nome) : 'Sem cliente'}</td>
+        <td>${pedido.formas_pagamento ? esc(pedido.formas_pagamento.nome) : '—'}</td>
         <td>${formatarMoeda(valorPedido)}</td>
         <td>${formatarMoeda(valorFinal)}</td>
         <td>${acoesEdicao}</td>
@@ -177,12 +177,12 @@ function verDetalhesVenda(id){
       : '<span class="badge-estoque-baixo">Em aberto</span>';
 
   const linhasItens = pedido.pedido_itens.map(item => `
-    <div class="linha-info"><span>${item.produtos ? item.produtos.nome : '(produto removido)'} — ${Number(item.quantidade).toLocaleString('pt-BR')} un.</span><span>${formatarMoeda(Number(item.quantidade) * Number(item.preco_unitario))}</span></div>
+    <div class="linha-info"><span>${item.produtos ? esc(item.produtos.nome) : '(produto removido)'} — ${Number(item.quantidade).toLocaleString('pt-BR')} un.</span><span>${formatarMoeda(Number(item.quantidade) * Number(item.preco_unitario))}</span></div>
   `).join('');
 
   const linhasEmbalagens = (pedido.pedido_embalagens || []).length > 0
     ? (pedido.pedido_embalagens || []).map(pe => `
-        <div class="linha-info"><span>${pe.embalagens ? pe.embalagens.nome : '(embalagem removida)'}</span><span>${Number(pe.quantidade).toLocaleString('pt-BR')} un.</span></div>
+        <div class="linha-info"><span>${pe.embalagens ? esc(pe.embalagens.nome) : '(embalagem removida)'}</span><span>${Number(pe.quantidade).toLocaleString('pt-BR')} un.</span></div>
       `).join('')
     : '<div class="item-sub">Nenhuma embalagem neste pedido.</div>';
 
@@ -190,9 +190,9 @@ function verDetalhesVenda(id){
   document.getElementById('detalhesVendaConteudo').innerHTML = `
     <div class="linha-info"><span>Status</span><span>${badgeStatus}</span></div>
     <div class="linha-info"><span>Data</span><span>${dataFormatada}</span></div>
-    <div class="linha-info"><span>Cliente</span><span>${pedido.clientes ? pedido.clientes.nome : 'Sem cliente'}</span></div>
-    <div class="linha-info"><span>Forma de pagamento</span><span>${pedido.formas_pagamento ? pedido.formas_pagamento.nome : '—'}</span></div>
-    ${pedido.observacao ? `<div class="linha-info"><span>Observação</span><span>${pedido.observacao}</span></div>` : ''}
+    <div class="linha-info"><span>Cliente</span><span>${pedido.clientes ? esc(pedido.clientes.nome) : 'Sem cliente'}</span></div>
+    <div class="linha-info"><span>Forma de pagamento</span><span>${pedido.formas_pagamento ? esc(pedido.formas_pagamento.nome) : '—'}</span></div>
+    ${pedido.observacao ? `<div class="linha-info"><span>Observação</span><span>${esc(pedido.observacao)}</span></div>` : ''}
 
     <div class="compra-secao-titulo">Itens do pedido</div>
     ${linhasItens}
@@ -309,19 +309,19 @@ function editarPedido(id){
 // --------- Novo pedido (formulário inline, sem modal) ---------
 function popularFormularioNovoPedido(clientes){
   document.getElementById('campoClienteVenda').innerHTML =
-    '<option value="">Sem cliente</option>' + clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    '<option value="">Sem cliente</option>' + clientes.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
 
   document.getElementById('campoFormaPagamentoVenda').innerHTML =
-    '<option value="">Não definida</option>' + formasPagamentoParaVenda.map(f => `<option value="${f.id}" data-taxa="${f.taxa_percentual}">${f.nome} (${Number(f.taxa_percentual).toLocaleString('pt-BR')}%)</option>`).join('');
+    '<option value="">Não definida</option>' + formasPagamentoParaVenda.map(f => `<option value="${f.id}" data-taxa="${f.taxa_percentual}">${esc(f.nome)} (${Number(f.taxa_percentual).toLocaleString('pt-BR')}%)</option>`).join('');
 
   document.getElementById('campoProdutoVenda').innerHTML =
-    '<option value="">Escolha um produto</option>' + produtosParaVenda.map(p => `<option value="${p.id}" data-preco="${p.preco_venda}">${p.nome}</option>`).join('');
+    '<option value="">Escolha um produto</option>' + produtosParaVenda.map(p => `<option value="${p.id}" data-preco="${p.preco_venda}">${esc(p.nome)}</option>`).join('');
 
   document.getElementById('campoEmbalagemVenda').innerHTML =
-    '<option value="">Escolha uma embalagem</option>' + embalagensParaVenda.map(e => `<option value="${e.id}">${e.nome}${e.dimensoes ? ' — ' + e.dimensoes : ''}</option>`).join('');
+    '<option value="">Escolha uma embalagem</option>' + embalagensParaVenda.map(e => `<option value="${e.id}">${esc(e.nome)}${e.dimensoes ? ' — ' + esc(e.dimensoes) : ''}</option>`).join('');
 
   if (!document.getElementById('campoDataVenda').value){
-    document.getElementById('campoDataVenda').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('campoDataVenda').value = hojeISO();
   }
 }
 
@@ -332,7 +332,7 @@ function renderizarItensVendaAtual(){
   } else {
     container.innerHTML = itensVendaAtual.map((item, indice) => `
       <div class="linha-info">
-        <span>${item.nome} — ${item.quantidade} un.</span>
+        <span>${esc(item.nome)} — ${item.quantidade} un.</span>
         <span>${(item.quantidade * item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           <button type="button" class="btn-acao excluir" data-remover-item-atual="${indice}" style="padding:2px 8px; margin-left:8px;">×</button>
         </span>
@@ -358,7 +358,7 @@ function renderizarItensEmbalagemVendaAtual(){
   }
   container.innerHTML = itensEmbalagemVendaAtual.map((item, indice) => `
     <div class="linha-info">
-      <span>${item.nome} — ${item.quantidade} un.</span>
+      <span>${esc(item.nome)} — ${item.quantidade} un.</span>
       <span><button type="button" class="btn-acao excluir" data-remover-embalagem-atual="${indice}" style="padding:2px 8px; margin-left:8px;">×</button></span>
     </div>
   `).join('');
@@ -469,7 +469,7 @@ function resetarFormularioNovaVenda(){
   document.getElementById('campoFreteVenda').value = 0;
   document.getElementById('campoClienteVenda').value = '';
   document.getElementById('campoFormaPagamentoVenda').value = '';
-  document.getElementById('campoDataVenda').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('campoDataVenda').value = hojeISO();
   renderizarItensVendaAtual();
   renderizarItensEmbalagemVendaAtual();
 }
@@ -589,8 +589,8 @@ async function obterConfigImpressaoComanda(){
 
 function montarHtmlComanda(pedido, config){
   const m = v => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const agora = new Date().toLocaleString('pt-BR');
-  const aberturaFormatada = pedido.criado_em ? new Date(pedido.criado_em).toLocaleString('pt-BR') : new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
+  const agora = formatarDataHoraBrasilia(new Date());
+  const aberturaFormatada = pedido.criado_em ? formatarDataHoraBrasilia(pedido.criado_em) : new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
   const numero = String(pedido.numero_venda).padStart(3, '0');
 
   const valorItens = pedido.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
@@ -601,18 +601,19 @@ function montarHtmlComanda(pedido, config){
   const linhasItens = pedido.pedido_itens.map(item => {
     const nome = item.produtos ? item.produtos.nome : '(produto removido)';
     const subtotal = Number(item.quantidade) * Number(item.preco_unitario);
-    return `<tr><td>${item.quantidade} ${nome} (${m(item.preco_unitario)})</td><td class="valor">${m(subtotal)}</td></tr>`;
+    return `<tr><td>${item.quantidade} ${esc(nome)} (${m(item.preco_unitario)})</td><td class="valor">${m(subtotal)}</td></tr>`;
   }).join('');
 
   const cliente = pedido.clientes;
   const temEndereco = cliente && (cliente.rua || cliente.bairro || cliente.cidade);
   const blocoEndereco = temEndereco ? `
     <div>(Entregar no endereço)</div>
-    <div>${cliente.rua || ''}${cliente.numero ? ', ' + cliente.numero : ''}</div>
-    <div>${cliente.bairro || ''}${cliente.cidade ? ' - ' + cliente.cidade : ''}${cliente.uf ? '/' + cliente.uf : ''}</div>
+    <div>${esc(cliente.rua)}${cliente.numero ? ', ' + esc(cliente.numero) : ''}</div>
+    <div>${esc(cliente.bairro)}${cliente.cidade ? ' - ' + esc(cliente.cidade) : ''}${cliente.uf ? '/' + esc(cliente.uf) : ''}</div>
   ` : '';
 
-  const largura = config.largura_papel || '80mm';
+  const larguraBruta = String(config.largura_papel || '');
+  const largura = /^\d{2,3}(\.\d+)?mm$/.test(larguraBruta) ? larguraBruta : '80mm'; // só aceita valores como 58mm/80mm (vai direto pro CSS)
 
   return `<!DOCTYPE html>
 <html>
@@ -633,16 +634,16 @@ function montarHtmlComanda(pedido, config){
 </style>
 </head>
 <body>
-  ${config.nome_loja ? `<div class="centro negrito" style="font-size:13px;">${config.nome_loja}</div>` : ''}
-  ${config.endereco_loja ? `<div class="centro">${config.endereco_loja}</div>` : ''}
-  ${config.telefone_loja ? `<div class="centro">${config.telefone_loja}</div>` : ''}
-  ${config.cnpj_loja ? `<div class="centro">CNPJ: ${config.cnpj_loja}</div>` : ''}
+  ${config.nome_loja ? `<div class="centro negrito" style="font-size:13px;">${esc(config.nome_loja)}</div>` : ''}
+  ${config.endereco_loja ? `<div class="centro">${esc(config.endereco_loja)}</div>` : ''}
+  ${config.telefone_loja ? `<div class="centro">${esc(config.telefone_loja)}</div>` : ''}
+  ${config.cnpj_loja ? `<div class="centro">CNPJ: ${esc(config.cnpj_loja)}</div>` : ''}
   <div class="centro">IMPRESSO EM ${agora}</div>
   ${config.mostrar_aviso_nao_fiscal ? '<div class="centro negrito">*** NAO E DOCUMENTO FISCAL ***</div>' : ''}
   <div class="linha"></div>
 
-  <div class="negrito">${cliente ? cliente.nome : 'Sem cliente'}</div>
-  ${cliente && cliente.telefone ? `<div>${cliente.telefone}</div>` : ''}
+  <div class="negrito">${cliente ? esc(cliente.nome) : 'Sem cliente'}</div>
+  ${cliente && cliente.telefone ? `<div>${esc(cliente.telefone)}</div>` : ''}
   ${blocoEndereco}
   <div class="linha"></div>
 
@@ -663,8 +664,8 @@ function montarHtmlComanda(pedido, config){
     <tr><td>= TOTAL A PAGAR:</td><td class="valor">${m(totalAPagar)}</td></tr>
   </table>
 
-  ${pedido.observacao ? `<div class="linha"></div><div>Obs: ${pedido.observacao}</div>` : ''}
-  ${config.mensagem_rodape ? `<div class="linha"></div><div class="centro">${config.mensagem_rodape.replace(/\n/g, '<br>')}</div>` : ''}
+  ${pedido.observacao ? `<div class="linha"></div><div>Obs: ${esc(pedido.observacao)}</div>` : ''}
+  ${config.mensagem_rodape ? `<div class="linha"></div><div class="centro">${esc(config.mensagem_rodape).replace(/\n/g, '<br>')}</div>` : ''}
 </body>
 </html>`;
 }

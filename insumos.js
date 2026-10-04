@@ -53,8 +53,8 @@ function relacionadosInsumoHtml(insumo){
     return '<span class="item-sub">Nenhum</span>';
   }
 
-  return fichas.map(n => `<span class="tag-produto">${n}</span>`).join('') +
-    produtos.map(n => `<span class="tag-produto" style="background:var(--bege);">${n}</span>`).join('');
+  return fichas.map(n => `<span class="tag-produto">${esc(n)}</span>`).join('') +
+    produtos.map(n => `<span class="tag-produto" style="background:var(--bege);">${esc(n)}</span>`).join('');
 }
 
 function renderizarTabelaInsumos(){
@@ -73,9 +73,9 @@ function renderizarTabelaInsumos(){
 
   corpo.innerHTML = insumos.map(insumo => `
     <tr>
-      <td class="celula-principal">${insumo.nome}</td>
+      <td class="celula-principal">${esc(insumo.nome)}</td>
       <td>${relacionadosInsumoHtml(insumo)}</td>
-      <td>${insumo.unidade_medida}</td>
+      <td>${esc(insumo.unidade_medida)}</td>
       <td>${moedaInsumo(insumo.custo_unitario || 0)}</td>
       <td>${insumo.estoque_minimo != null ? Number(insumo.estoque_minimo).toLocaleString('pt-BR') : '—'}</td>
       <td><button type="button" class="btn-acao" data-editar-insumo="${insumo.id}">Editar</button></td>

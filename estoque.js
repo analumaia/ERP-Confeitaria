@@ -91,10 +91,10 @@ function renderizarListaCombo(){
   opcoesVisiveis.forEach((o, i) => {
     if (o.grupo !== grupoAtual){
       grupoAtual = o.grupo;
-      html += `<div class="combo-grupo" role="presentation">${o.grupo}</div>`;
+      html += `<div class="combo-grupo" role="presentation">${esc(o.grupo)}</div>`;
     }
     const selecionada = o.valor === valorItemSelecionado;
-    html += `<div class="combo-opcao${i === opcaoAtiva ? ' ativa' : ''}${selecionada ? ' selecionada' : ''}" role="option" id="opcaoCombo${i}" data-indice="${i}" aria-selected="${selecionada}">${o.abaixo ? '⚠️ ' : ''}${o.nome}${o.inativo ? ' (inativo)' : ''}</div>`;
+    html += `<div class="combo-opcao${i === opcaoAtiva ? ' ativa' : ''}${selecionada ? ' selecionada' : ''}" role="option" id="opcaoCombo${i}" data-indice="${i}" aria-selected="${selecionada}">${o.abaixo ? '⚠️ ' : ''}${esc(o.nome)}${o.inativo ? ' (inativo)' : ''}</div>`;
   });
   comboLista.innerHTML = html;
 
@@ -199,12 +199,10 @@ document.getElementById('btnBalancoItem').addEventListener('click', () => {
 // Período — filtra os totais de entradas/saídas e o extrato.
 // O saldo atual nunca depende dele.
 // --------------------------------------------------------
-function dataLocalISO(data){
-  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
-}
+// dataLocalISO agora vive em core.js (horário de Brasília)
 
 function definirPeriodoEstoque(tipo){
-  const hoje = new Date();
+  const hoje = agoraBrasilia();
   let de = '', ate = '';
   if (tipo === 'mes'){
     de = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
@@ -305,10 +303,10 @@ async function carregarExtratoItem(){
     ? supabaseClient.from('movimentacoes_fichas').select('*').eq('ficha_id', itemId)
     : supabaseClient.from('movimentacoes_estoque').select('*').eq('tipo_item', tipoItem).eq('item_id', itemId);
   if (campoPeriodoDe.value){
-    consulta = consulta.gte('criado_em', new Date(campoPeriodoDe.value + 'T00:00:00').toISOString());
+    consulta = consulta.gte('criado_em', new Date(campoPeriodoDe.value + 'T00:00:00' + OFFSET_BRASILIA).toISOString());
   }
   if (campoPeriodoAte.value){
-    consulta = consulta.lte('criado_em', new Date(campoPeriodoAte.value + 'T23:59:59.999').toISOString());
+    consulta = consulta.lte('criado_em', new Date(campoPeriodoAte.value + 'T23:59:59.999' + OFFSET_BRASILIA).toISOString());
   }
   const { data, error } = await consulta.order('criado_em', { ascending: false }).limit(LIMITE_EXTRATO);
 
@@ -348,14 +346,14 @@ async function carregarExtratoItem(){
         </thead>
         <tbody>
           ${data.map(m => {
-            const dataFormatada = new Date(m.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+            const dataFormatada = formatarDataHoraBrasilia(m.criado_em, { dateStyle: 'short', timeStyle: 'short' });
             return `
               <tr>
                 <td>${dataFormatada}</td>
                 <td>${m.tipo_movimento === 'entrada' ? `<span class="valor-entrada">+${Number(m.quantidade).toLocaleString('pt-BR')}</span>` : '-'}</td>
                 <td>${m.tipo_movimento === 'saida' ? `<span class="valor-saida">−${Number(m.quantidade).toLocaleString('pt-BR')}</span>` : '-'}</td>
                 <td>${capitalizar(String(m.origem).replace(/_/g, ' '))}</td>
-                <td>${m.observacao || '-'}</td>
+                <td>${esc(m.observacao) || '-'}</td>
               </tr>
             `;
           }).join('')}

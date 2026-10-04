@@ -10,6 +10,57 @@
    depois de supabase-config.js + a biblioteca do Supabase.
    ============================================================ */
 
+// --------------------------------------------------------
+// Fuso horário: todo o sistema trabalha em horário de Brasília
+// (America/Sao_Paulo), independente do fuso do computador/celular.
+// agoraBrasilia() devolve um Date cujos getters (getFullYear,
+// getMonth, getDate...) já refletem o relógio de Brasília — assim
+// o código existente que monta datas com esses getters continua
+// valendo. O Brasil não tem horário de verão desde 2019, então
+// o offset fixo -03:00 é seguro para montar intervalos de consulta.
+// --------------------------------------------------------
+const FUSO_BRASILIA = 'America/Sao_Paulo';
+const OFFSET_BRASILIA = '-03:00';
+
+function agoraBrasilia(){
+  const partes = {};
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSO_BRASILIA, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).formatToParts(new Date()).forEach(p => { partes[p.type] = p.value; });
+  return new Date(
+    Number(partes.year), Number(partes.month) - 1, Number(partes.day),
+    Number(partes.hour) % 24, Number(partes.minute), Number(partes.second)
+  );
+}
+
+function dataLocalISO(data){
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+}
+
+function hojeISO(){ return dataLocalISO(agoraBrasilia()); }        // AAAA-MM-DD de hoje em Brasília
+function mesAtualISO(){ return hojeISO().slice(0, 7); }             // AAAA-MM do mês atual em Brasília
+
+// Formata um instante (timestamp do banco) sempre em horário de Brasília
+function formatarDataHoraBrasilia(valor, opcoes){
+  return new Date(valor).toLocaleString('pt-BR', Object.assign({ timeZone: FUSO_BRASILIA }, opcoes || {}));
+}
+
+// --------------------------------------------------------
+// Segurança: escapa texto antes de entrar em innerHTML / atributos.
+// Use esc() em TODO dado vindo do banco ou digitado pelo usuário.
+// --------------------------------------------------------
+function esc(valor){
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const supabaseClient = window.supabase.createClient(
   window.SUPABASE_URL,
   window.SUPABASE_ANON_KEY

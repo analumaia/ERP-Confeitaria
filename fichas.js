@@ -91,13 +91,13 @@ function renderizarFichas(){
     return `
       <div class="cartao-item ficha-card">
         <div class="ficha-card-corpo">
-          <div class="titulo-item"><span>${ficha.nome}</span></div>
+          <div class="titulo-item"><span>${esc(ficha.nome)}</span></div>
           <div class="linha-info"><span>Rendimento</span><span>${numeroFicha(ficha.rendimento_quantidade)} ${ficha.rendimento_unidade}</span></div>
           <div class="linha-info"><span>Insumos</span><span>${qtdInsumos}</span></div>
           <div class="ficha-produtos">
             <div class="item-sub">Produtos relacionados</div>
             <div>${nomesProdutos.length > 0
-              ? nomesProdutos.map(n => `<span class="tag-produto">${n}</span>`).join('')
+              ? nomesProdutos.map(n => `<span class="tag-produto">${esc(n)}</span>`).join('')
               : '<span class="item-sub">Nenhum produto usa esta ficha ainda.</span>'}</div>
           </div>
         </div>
@@ -124,7 +124,7 @@ function opcoesInsumoFichaHtml(selecionadoId){
   return '<option value="">Selecione o insumo...</option>' +
     insumosFicha
       .filter(i => i.ativo !== false || String(i.id) === String(selecionadoId))
-      .map(i => `<option value="${i.id}"${String(i.id) === String(selecionadoId) ? ' selected' : ''}>${i.nome} (${i.unidade_medida})${i.ativo === false ? ' — inativo' : ''}</option>`)
+      .map(i => `<option value="${i.id}"${String(i.id) === String(selecionadoId) ? ' selected' : ''}>${esc(i.nome)} (${esc(i.unidade_medida)})${i.ativo === false ? ' — inativo' : ''}</option>`)
       .join('');
 }
 

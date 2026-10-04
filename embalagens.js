@@ -58,9 +58,9 @@ function renderizarTabelaEmbalagens(){
 
   corpo.innerHTML = embalagens.map(embalagem => `
     <tr>
-      <td class="celula-principal">${embalagem.nome}</td>
+      <td class="celula-principal">${esc(embalagem.nome)}</td>
       <td>${moedaEmbalagem(embalagem.custo_unitario || 0)}</td>
-      <td>${embalagem.dimensoes || '—'}</td>
+      <td>${esc(embalagem.dimensoes) || '—'}</td>
       <td>${embalagem.estoque_minimo != null ? Number(embalagem.estoque_minimo).toLocaleString('pt-BR') : '—'}</td>
       <td><button type="button" class="btn-acao" data-editar-embalagem="${embalagem.id}">Editar</button></td>
       <td><button type="button" class="btn-acao excluir" data-excluir-embalagem="${embalagem.id}">Excluir</button></td>

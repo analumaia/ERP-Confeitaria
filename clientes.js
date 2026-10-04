@@ -62,9 +62,9 @@ function renderizarClientes(){
   grade.innerHTML = clientesCarregados.map(cliente => `
     <div class="cartao-item ficha-card">
       <div class="ficha-card-corpo">
-        <div class="titulo-item"><span>${cliente.nome}</span></div>
-        <div class="linha-info"><span>Telefone</span><span>${cliente.telefone || '—'}</span></div>
-        <div class="linha-info"><span>Cep</span><span>${cliente.cep || '—'}</span></div>
+        <div class="titulo-item"><span>${esc(cliente.nome)}</span></div>
+        <div class="linha-info"><span>Telefone</span><span>${esc(cliente.telefone) || '—'}</span></div>
+        <div class="linha-info"><span>Cep</span><span>${esc(cliente.cep) || '—'}</span></div>
         <div class="linha-info"><span>Nº de compras</span><span>${numeroComprasCliente(cliente)}</span></div>
       </div>
       <div class="ficha-card-acoes">

@@ -57,7 +57,7 @@ function grupoDoLancamento(l){
 }
 
 async function carregarCaixa(){
-  const mesAno = filtroPeriodoCaixa.value || dataLocalISO(new Date()).slice(0, 7);
+  const mesAno = filtroPeriodoCaixa.value || mesAtualISO();
   const { primeiroDia, ultimoDia } = limitesDoMes(mesAno);
 
   const containerResumo = document.getElementById('resumoCaixa');
@@ -122,9 +122,9 @@ async function carregarCaixa(){
     return `
       <tr>
         <td>${dataFormatada}</td>
-        <td class="celula-principal">${nomeCategoria}</td>
+        <td class="celula-principal">${esc(nomeCategoria)}</td>
         <td>${capitalizar(l.origem)}</td>
-        <td>${l.observacao || '—'}</td>
+        <td>${esc(l.observacao) || '—'}</td>
         <td style="color:${ehEntrada ? 'var(--verde)' : 'var(--vermelho)'}; font-weight:700; white-space:nowrap;">${ehEntrada ? '+ ' : '− '}${formatarMoeda(Number(l.valor))}</td>
       </tr>
     `;
@@ -221,7 +221,7 @@ function renderizarResumosPorGrupo(lancamentos){
     const itens = resumoPorGrupo(lancamentos, g.codigo);
     const total = itens.reduce((s, [, v]) => s + v, 0);
     const linhas = itens.length > 0
-      ? itens.map(([nome, valor]) => `<div class="linha-info"><span>${nome}</span><span>${m(valor)}</span></div>`).join('')
+      ? itens.map(([nome, valor]) => `<div class="linha-info"><span>${esc(nome)}</span><span>${m(valor)}</span></div>`).join('')
       : '<div class="item-sub">Nenhum lançamento neste grupo no período.</div>';
     return `
       <div class="cartao-item">
@@ -233,7 +233,7 @@ function renderizarResumosPorGrupo(lancamentos){
   }).join('');
 }
 
-filtroPeriodoCaixa.value = dataLocalISO(new Date()).slice(0, 7);
+filtroPeriodoCaixa.value = mesAtualISO();
 filtroPeriodoCaixa.addEventListener('change', carregarCaixa);
 document.getElementById('btnNovoLancamento').addEventListener('click', () => abrirModalNovoLancamento());
 
@@ -246,7 +246,7 @@ function opcoesCategoriaLancamentoHtml(tipo, selecionada){
   const opcoes = categoriasFinanceirasAtivas.filter(c => c.tipo === tipo);
   if (opcoes.length === 0) return '<option value="">Nenhuma categoria cadastrada — crie em Configurações</option>';
   return '<option value="">Selecione a categoria...</option>' +
-    opcoes.map(c => `<option value="${c.id}"${String(c.id) === String(selecionada) ? ' selected' : ''}>${c.nome} (${rotuloGrupoDre(c.grupo_dre)})</option>`).join('');
+    opcoes.map(c => `<option value="${c.id}"${String(c.id) === String(selecionada) ? ' selected' : ''}>${esc(c.nome)} (${rotuloGrupoDre(c.grupo_dre)})</option>`).join('');
 }
 
 function abrirModalNovoLancamento(categoriaPreenchidaId){
@@ -266,7 +266,7 @@ function abrirModalNovoLancamento(categoriaPreenchidaId){
     </div>
     <div class="form-grupo">
       <label for="campoDataLancamento">Data</label>
-      <input type="date" id="campoDataLancamento" value="${dataLocalISO(new Date())}">
+      <input type="date" id="campoDataLancamento" value="${hojeISO()}">
     </div>
     <div class="form-grupo">
       <label for="campoCategoriaLancamento">Categoria</label>

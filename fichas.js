@@ -244,12 +244,7 @@ async function salvarFicha(){
   btnSalvarFicha.textContent = 'Salvando...';
 
   const dadosFicha = { nome, rendimento_quantidade: rendimento, rendimento_unidade: unidade };
-  let sucesso;
-  if (fichaEmEdicaoId){
-    sucesso = await atualizarFichaExistente(fichaEmEdicaoId, dadosFicha, itens);
-  } else {
-    sucesso = await criarFichaNova(dadosFicha, itens);
-  }
+  const sucesso = await salvarFichaNoBanco(fichaEmEdicaoId, dadosFicha, itens);
 
   btnSalvarFicha.disabled = false;
   btnSalvarFicha.textContent = 'Salvar';
@@ -261,48 +256,15 @@ async function salvarFicha(){
   carregarFichas();
 }
 
-async function criarFichaNova(dadosFicha, itens){
-  const { data: criada, error } = await supabaseClient.from('receitas').insert(dadosFicha).select().single();
+// criar e editar passam pela mesma função do banco (salvar_ficha), que grava a
+// ficha e todos os insumos numa transação só — se algo falhar, nada muda
+async function salvarFichaNoBanco(id, dadosFicha, itens){
+  const { error } = await supabaseClient.rpc('salvar_ficha', { p_id: id || null, p_ficha: dadosFicha, p_itens: itens });
   if (error){
-    mostrarToast('Não foi possível criar a ficha técnica.', 'erro');
-    return false;
-  }
-  const { error: erroItens } = await supabaseClient.from('receita_itens').insert(itens.map(i => ({ ...i, receita_id: criada.id })));
-  if (erroItens){
-    await supabaseClient.from('receitas').delete().eq('id', criada.id); // não deixa ficha vazia pra trás
-    mostrarToast('Não foi possível salvar os insumos. Nada foi registrado — tente novamente.', 'erro');
-    return false;
-  }
-  return true;
-}
-
-async function atualizarFichaExistente(id, dadosFicha, itens){
-  const antes = fichasCarregadas.find(f => String(f.id) === String(id));
-
-  async function restaurar(){
-    if (!antes) return;
-    await supabaseClient.from('receitas').update({ nome: antes.nome, rendimento_quantidade: antes.rendimento_quantidade, rendimento_unidade: antes.rendimento_unidade }).eq('id', id);
-    await supabaseClient.from('receita_itens').delete().eq('receita_id', id);
-    if ((antes.receita_itens || []).length > 0){
-      await supabaseClient.from('receita_itens').insert(antes.receita_itens.map(i => ({ receita_id: id, insumo_id: i.insumo_id, quantidade: i.quantidade })));
-    }
-  }
-
-  const { error: erroFicha } = await supabaseClient.from('receitas').update(dadosFicha).eq('id', id);
-  if (erroFicha){
-    mostrarToast('Não foi possível atualizar a ficha técnica.', 'erro');
-    return false;
-  }
-  const { error: erroApagar } = await supabaseClient.from('receita_itens').delete().eq('receita_id', id);
-  if (erroApagar){
-    await restaurar();
-    mostrarToast('Não foi possível atualizar os insumos. A ficha foi mantida como estava.', 'erro');
-    return false;
-  }
-  const { error: erroItens } = await supabaseClient.from('receita_itens').insert(itens.map(i => ({ ...i, receita_id: id })));
-  if (erroItens){
-    await restaurar();
-    mostrarToast('Não foi possível salvar os insumos. A ficha foi mantida como estava.', 'erro');
+    const semFuncao = String(error.message || '').includes('salvar_ficha');
+    mostrarToast(semFuncao
+      ? 'A função salvar_ficha ainda não existe no banco — rode o SQL migracao-transacoes-e-cmv.sql.'
+      : (id ? 'Não foi possível atualizar a ficha técnica. Ela foi mantida como estava.' : 'Não foi possível criar a ficha técnica. Nada foi registrado — tente novamente.'), 'erro');
     return false;
   }
   return true;

@@ -502,61 +502,27 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', async () 
   btnRegistrar.disabled = true;
   btnRegistrar.textContent = pedidoEmEdicaoId ? 'Salvando...' : 'Registrando...';
 
-  let pedidoId = pedidoEmEdicaoId;
-  let numeroVenda = pedidoEmEdicaoId ? (dadosCarregados.pedidos || []).find(p => String(p.id) === String(pedidoEmEdicaoId))?.numero_venda : null;
+  // pedido + itens + embalagens numa transação só (função salvar_pedido no banco).
+  // Na edição o banco trava o pedido e só aceita se ainda estiver em aberto.
+  const { data: resultado, error: erroSalvar } = await supabaseClient.rpc('salvar_pedido', {
+    p_id: pedidoEmEdicaoId || null,
+    p_pedido: dadosPedido,
+    p_itens: itensVendaAtual.map(item => ({ produto_id: item.produto_id, quantidade: item.quantidade, preco_unitario: item.preco_unitario })),
+    p_embalagens: itensEmbalagemVendaAtual.map(item => ({ embalagem_id: item.embalagem_id, quantidade: item.quantidade })),
+  });
 
-  if (pedidoEmEdicaoId){
-    // edição: atualiza o pedido, e substitui os itens/embalagens (apaga e
-    // reinsere) — mais simples que fazer diff, e seguro porque só se edita
-    // pedido em aberto (nada foi debitado em estoque/financeiro ainda)
-    const { error: erroAtualizar } = await supabaseClient.from('pedidos').update(dadosPedido).eq('id', pedidoEmEdicaoId);
-    if (erroAtualizar){
-      btnRegistrar.disabled = false;
-      btnRegistrar.textContent = 'Salvar alterações';
-      mostrarToast('Não foi possível salvar as alterações do pedido.', 'erro');
-      return;
-    }
-    await supabaseClient.from('pedido_itens').delete().eq('pedido_id', pedidoEmEdicaoId);
-    await supabaseClient.from('pedido_embalagens').delete().eq('pedido_id', pedidoEmEdicaoId);
-  } else {
-    const { data: pedidoCriado, error: erroPedido } = await supabaseClient
-      .from('pedidos')
-      .insert({ ...dadosPedido, status: 'aberto' })
-      .select()
-      .single();
-
-    if (erroPedido){
-      btnRegistrar.disabled = false;
-      btnRegistrar.textContent = 'Registrar pedido';
-      mostrarToast('Não foi possível criar o pedido.', 'erro');
-      return;
-    }
-    pedidoId = pedidoCriado.id;
-    numeroVenda = pedidoCriado.numero_venda;
-  }
-
-  const itensComPedidoId = itensVendaAtual.map(item => ({
-    produto_id: item.produto_id, quantidade: item.quantidade, preco_unitario: item.preco_unitario, pedido_id: pedidoId,
-  }));
-  const { error: erroItens } = await supabaseClient.from('pedido_itens').insert(itensComPedidoId);
-
-  if (erroItens){
+  if (erroSalvar){
     btnRegistrar.disabled = false;
     btnRegistrar.textContent = pedidoEmEdicaoId ? 'Salvar alterações' : 'Registrar pedido';
-    mostrarToast('Pedido salvo, mas houve erro ao salvar os itens.', 'erro');
-    carregarVendas();
+    const msg = String(erroSalvar.message || '');
+    mostrarToast(msg.includes('salvar_pedido') && msg.includes('function')
+      ? 'A função salvar_pedido ainda não existe no banco — rode o SQL migracao-transacoes-e-cmv.sql.'
+      : (msg.includes('Só é possível editar') ? msg : 'Não foi possível salvar o pedido. Nada foi alterado — tente novamente.'), 'erro');
+    if (msg.includes('Só é possível editar')) carregarVendas();
     return;
   }
 
-  if (itensEmbalagemVendaAtual.length > 0){
-    const embalagensComPedidoId = itensEmbalagemVendaAtual.map(item => ({
-      embalagem_id: item.embalagem_id, quantidade: item.quantidade, pedido_id: pedidoId,
-    }));
-    const { error: erroEmbalagens } = await supabaseClient.from('pedido_embalagens').insert(embalagensComPedidoId);
-    if (erroEmbalagens){
-      mostrarToast('Pedido e itens salvos, mas as embalagens não foram salvas.', 'erro');
-    }
-  }
+  const numeroVenda = resultado ? resultado.numero_venda : null;
 
   btnRegistrar.disabled = false;
   btnRegistrar.textContent = 'Registrar pedido';

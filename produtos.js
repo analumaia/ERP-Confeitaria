@@ -289,14 +289,13 @@ formProduto.addEventListener('submit', async (evento) => {
     ativo,
   };
 
-  let erro, idSalvo = produtoEmEdicaoId;
-  if (produtoEmEdicaoId){
-    ({ error: erro } = await supabaseClient.from('produtos').update(dadosProduto).eq('id', produtoEmEdicaoId));
-  } else {
-    const resultado = await supabaseClient.from('produtos').insert(dadosProduto).select().single();
-    erro = resultado.error;
-    if (resultado.data) idSalvo = resultado.data.id;
-  }
+  // produto + composição numa transação só (função salvar_produto no banco).
+  // composição null = não mexe (campo desabilitado); [] = esvazia
+  const { error: erro } = await supabaseClient.rpc('salvar_produto', {
+    p_id: produtoEmEdicaoId || null,
+    p_produto: dadosProduto,
+    p_composicao: composicaoHabilitada ? composicao.itens : null,
+  });
 
   // SKU duplicado (índice único) chega como erro de violação de unicidade
   if (erro && String(erro.message || '').includes('produtos_sku_unico')){
@@ -306,27 +305,12 @@ formProduto.addEventListener('submit', async (evento) => {
     return;
   }
 
-  if (!erro && composicaoHabilitada){
-    const { error: erroApagar } = await supabaseClient.from('produto_composicao').delete().eq('produto_id', idSalvo);
-    let erroInserir = null;
-    if (!erroApagar && composicao.itens.length > 0){
-      ({ error: erroInserir } = await supabaseClient.from('produto_composicao').insert(composicao.itens.map(item => ({ ...item, produto_id: idSalvo }))));
-    }
-    if (erroApagar || erroInserir){
-      btnSalvarProduto.disabled = false;
-      btnSalvarProduto.textContent = 'Salvar';
-      mostrarToast(produtoEmEdicaoId ? 'Produto salvo, mas a composição não pôde ser atualizada. Abra editar e tente de novo.' : 'Produto criado, mas a composição não pôde ser salva. Abra editar e tente de novo.', 'erro');
-      fecharModalProduto();
-      carregarProdutosTabela();
-      return;
-    }
-  }
-
   btnSalvarProduto.disabled = false;
   btnSalvarProduto.textContent = 'Salvar';
 
   if (erro){
-    mostrarToast('Não foi possível salvar o produto. Se você preencheu SKU ou estoque máximo, confira se rodou o SQL migracao-produtos-sku-estoque.sql.', 'erro');
+    const semFuncao = String(erro.message || '').includes('salvar_produto');
+    mostrarToast(semFuncao ? 'A função salvar_produto ainda não existe no banco — rode o SQL migracao-transacoes-e-cmv.sql.' : 'Não foi possível salvar o produto. Nada foi alterado — confira os campos e tente novamente.', 'erro');
     return;
   }
 

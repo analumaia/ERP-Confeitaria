@@ -56,6 +56,100 @@ function grupoDoLancamento(l){
   return null;
 }
 
+// --------------------------------------------------------
+// RESULTADO DO MÊS (regime de competência) — ÚNICA fonte do lucro
+// no sistema: a DRE aqui e o "Lucro" da Visão geral usam esta função.
+//
+// Por que não somar os lançamentos de caixa direto:
+//  - compra de insumo é ESTOQUE (ativo), não despesa: o custo só vira
+//    despesa (CMV) quando o produto é vendido. Por isso os lançamentos
+//    automáticos de compra (origem 'compra', inclusive o frete de
+//    compra, que já está rateado no custo do insumo) NÃO entram na DRE;
+//  - a receita vem dos pedidos confirmados (data do pedido), com o
+//    desconto como dedução e o frete cobrado como receita;
+//  - a taxa de maquininha é despesa de venda, calculada por pedido;
+//  - o CMV é o custo congelado no momento da venda (pedidos.cmv_total).
+// Lançamentos MANUAIS entram pelo grupo da categoria escolhida.
+// O fluxo de caixa (entradas/saídas) continua existindo à parte,
+// nos cartões do topo desta tela.
+// --------------------------------------------------------
+const SELECT_PEDIDOS_RESULTADO = '*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome)), pedido_embalagens(quantidade, embalagens(custo_unitario)), formas_pagamento(taxa_percentual)';
+
+const ehLancamentoAutomatico = l => l.origem === 'venda' || l.origem === 'compra';
+
+// Pedidos antigos sem cmv_total (migração ainda não rodada) usam o custo
+// atual da ficha técnica como estimativa — só busca se for preciso
+async function buscarCustoUnitarioPorProduto(pedidos){
+  if (!pedidos.some(p => p.cmv_total === null || p.cmv_total === undefined)) return {};
+  const { data } = await supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)');
+  const custo = {};
+  (data || []).forEach(item => {
+    const custoInsumo = item.insumos ? Number(item.insumos.custo_unitario) : 0;
+    custo[item.produto_id] = (custo[item.produto_id] || 0) + Number(item.quantidade) * custoInsumo;
+  });
+  return custo;
+}
+
+function cmvDoPedido(pedido, custoPorProduto){
+  if (pedido.cmv_total !== null && pedido.cmv_total !== undefined) return Number(pedido.cmv_total);
+  let custo = 0;
+  pedido.pedido_itens.forEach(item => { custo += Number(item.quantidade) * (custoPorProduto[item.produto_id] || 0); });
+  (pedido.pedido_embalagens || []).forEach(pe => { custo += Number(pe.quantidade) * (pe.embalagens ? Number(pe.embalagens.custo_unitario) : 0); });
+  return custo;
+}
+
+function calcularResultadoMes(pedidos, lancamentos, custoPorProduto){
+  const r = {
+    quantidadePedidos: pedidos.length, produtosVendidos: 0,
+    receitaBruta: 0, descontos: 0, receitaProdutos: 0, frete: 0, taxas: 0, cmvVendas: 0,
+  };
+
+  pedidos.forEach(pedido => {
+    const bruto = pedido.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
+    const desconto = Math.min(bruto, Number(pedido.desconto || 0)); // desconto só incide sobre os itens
+    const frete = Number(pedido.valor_frete || 0);
+    const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
+
+    r.receitaBruta += bruto;
+    r.descontos += desconto;
+    r.receitaProdutos += bruto - desconto;
+    r.frete += frete;
+    r.taxas += (bruto - desconto + frete) * (taxaPct / 100); // a taxa incide sobre itens + frete
+    r.cmvVendas += cmvDoPedido(pedido, custoPorProduto || {});
+    pedido.pedido_itens.forEach(i => { r.produtosVendidos += Number(i.quantidade); });
+  });
+
+  // lançamentos manuais, por grupo da DRE. O que não encaixa em nenhuma
+  // linha (sem categoria, ou tipo incoerente com o grupo) fica em "foraDaDre"
+  const manuais = lancamentos.filter(l => !ehLancamentoAutomatico(l));
+  const COMBINACOES = ['receita_vendas|entrada', 'impostos|saida', 'cmv|saida', 'despesas_vendas|saida', 'despesas_operacionais|saida', 'receitas_diversas|entrada', 'despesas_diversas|saida'];
+  const somaManual = (grupo, tipo) => manuais
+    .filter(l => grupoDoLancamento(l) === grupo && l.tipo === tipo)
+    .reduce((s, l) => s + Number(l.valor), 0);
+
+  r.outrasReceitasVendas = somaManual('receita_vendas', 'entrada');
+  r.impostos = somaManual('impostos', 'saida');
+  r.cmvManual = somaManual('cmv', 'saida');
+  r.despesasVendasManuais = somaManual('despesas_vendas', 'saida');
+  r.despesasOperacionais = somaManual('despesas_operacionais', 'saida');
+  r.receitasDiversas = somaManual('receitas_diversas', 'entrada');
+  r.despesasDiversas = somaManual('despesas_diversas', 'saida');
+  r.foraDaDre = manuais
+    .filter(l => !COMBINACOES.includes(`${grupoDoLancamento(l)}|${l.tipo}`))
+    .reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
+
+  r.receitaLiquida = r.receitaProdutos + r.outrasReceitasVendas + r.frete - r.impostos;
+  r.cmv = r.cmvVendas + r.cmvManual;
+  r.lucroBruto = r.receitaLiquida - r.cmv;
+  r.despesasVendas = r.taxas + r.despesasVendasManuais;
+  r.lucroOperacional = r.lucroBruto - r.despesasVendas - r.despesasOperacionais;
+  r.resultadoDiversos = r.receitasDiversas - r.despesasDiversas;
+  r.lucroPrejuizo = r.lucroOperacional + r.resultadoDiversos;
+  // despesas manuais "líquidas" usadas no card da Visão geral (lucro = lucro bruto − taxas − isto)
+  r.outrasDespesasLiquidas = r.despesasVendasManuais + r.despesasOperacionais + r.despesasDiversas - r.receitasDiversas;
+  return r;
+}
+
 async function carregarCaixa(){
   const mesAno = filtroPeriodoCaixa.value || mesAtualISO();
   const { primeiroDia, ultimoDia } = limitesDoMes(mesAno);
@@ -65,7 +159,7 @@ async function carregarCaixa(){
   containerResumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
   corpo.innerHTML = '<tr><td colspan="5" class="lista-vazia">Carregando...</td></tr>';
 
-  const [respLancamentos, respCategorias] = await Promise.all([
+  const [respLancamentos, respCategorias, respPedidos] = await Promise.all([
     supabaseClient
       .from('lancamentos_financeiros')
       .select('*, categorias_financeiras(nome, grupo_dre)')
@@ -74,9 +168,10 @@ async function carregarCaixa(){
       .order('data', { ascending: false })
       .order('criado_em', { ascending: false }),
     supabaseClient.from('categorias_financeiras').select('*').eq('ativo', true).order('nome'),
+    supabaseClient.from('pedidos').select(SELECT_PEDIDOS_RESULTADO).eq('status', 'confirmado').gte('data_pedido', primeiroDia).lte('data_pedido', ultimoDia),
   ]);
 
-  if (respLancamentos.error){
+  if (respLancamentos.error || respPedidos.error){
     containerResumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o controle de caixa.</div>';
     corpo.innerHTML = '<tr><td colspan="5" class="lista-vazia">Não foi possível carregar os lançamentos. Se ainda não rodou, execute o SQL <strong>migracao-categorias-financeiras.sql</strong> no Supabase.</td></tr>';
     mostrarToast('Erro ao carregar o controle de caixa.', 'erro');
@@ -103,11 +198,13 @@ async function carregarCaixa(){
     <div class="cartao-item">
       <div class="titulo-item"><span>Saldo do mês (bruto)</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${saldo >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(saldo)}</span></div>
-      <div class="item-sub">Não desconta taxa de maquininha nem frete das vendas — veja o valor líquido recebido em Vendas, ou o lucro líquido estimado na Visão geral.</div>
+      <div class="item-sub">Não desconta taxa de maquininha nem frete das vendas — este cartão é fluxo de caixa. O lucro (por competência) está na DRE abaixo e em "Lucro do mês" na Visão geral.</div>
     </div>
   `;
 
-  renderizarDRE(data);
+  const pedidosDoMes = respPedidos.data || [];
+  const custoPorProduto = await buscarCustoUnitarioPorProduto(pedidosDoMes);
+  renderizarDRE(calcularResultadoMes(pedidosDoMes, data, custoPorProduto));
   renderizarResumosPorGrupo(data);
 
   if (data.length === 0){
@@ -132,46 +229,18 @@ async function carregarCaixa(){
 }
 
 // --------------------------------------------------------
-// DRE resumida — mesma estrutura de uma DRE gerencial padrão:
-// Receita de Vendas → Impostos → Receita Líquida → CMV → Lucro
-// Bruto → Despesas de Vendas/Operacionais → Lucro Operacional →
-// Receitas/Despesas Diversas → Lucro/Prejuízo.
+// DRE (regime de competência) — recebe o resultado já calculado por
+// calcularResultadoMes. Receita de Vendas → Impostos → Receita
+// Líquida → CMV → Lucro Bruto → Despesas de Vendas/Operacionais →
+// Lucro Operacional → Receitas/Despesas Diversas → Lucro/Prejuízo.
 // --------------------------------------------------------
-function calcularDRE(lancamentos){
-  const somaGrupo = (grupo, tipo) => lancamentos
-    .filter(l => grupoDoLancamento(l) === grupo && l.tipo === tipo)
-    .reduce((s, l) => s + Number(l.valor), 0);
-
-  const receitaVendas = somaGrupo('receita_vendas', 'entrada');
-  const impostos = somaGrupo('impostos', 'saida');
-  const receitaLiquida = receitaVendas - impostos;
-  const cmv = somaGrupo('cmv', 'saida');
-  const lucroBruto = receitaLiquida - cmv;
-  const despesasVendas = somaGrupo('despesas_vendas', 'saida');
-  const despesasOperacionais = somaGrupo('despesas_operacionais', 'saida');
-  const lucroOperacional = lucroBruto - despesasVendas - despesasOperacionais;
-  const receitasDiversas = somaGrupo('receitas_diversas', 'entrada');
-  const despesasDiversas = somaGrupo('despesas_diversas', 'saida');
-  const resultadoDiversos = receitasDiversas - despesasDiversas;
-  const lucroPrejuizo = lucroOperacional + resultadoDiversos;
-
-  // lançamentos que não caíram em nenhum grupo — nunca somem, aparecem
-  // à parte pra sempre serem vistos e reclassificados se for o caso
-  const semCategoria = lancamentos
-    .filter(l => grupoDoLancamento(l) === null)
-    .reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
-
-  return { receitaVendas, impostos, receitaLiquida, cmv, lucroBruto, despesasVendas, despesasOperacionais, lucroOperacional, receitasDiversas, despesasDiversas, resultadoDiversos, lucroPrejuizo, semCategoria };
-}
-
-function renderizarDRE(lancamentos){
+function renderizarDRE(d){
   const corpo = document.getElementById('corpoDreCaixa');
-  const d = calcularDRE(lancamentos);
   const m = v => Math.abs(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const linhaMov = (label, valor) => `
+  const linhaMov = (label, valor, nota) => `
     <tr>
-      <td class="celula-principal">${label}</td>
+      <td class="celula-principal">${label}${nota ? `<span class="item-sub">${nota}</span>` : ''}</td>
       <td style="text-align:right; white-space:nowrap; color:${valor < 0 ? 'var(--vermelho)' : 'var(--verde)'};">${valor < 0 ? '− ' : ''}${m(valor)}</td>
     </tr>`;
   const linhaSub = (label, valor) => `
@@ -181,21 +250,26 @@ function renderizarDRE(lancamentos){
     </tr>`;
 
   corpo.innerHTML =
-    linhaMov('(+) Receita de Vendas', d.receitaVendas) +
+    linhaMov('(+) Receita de vendas (produtos)', d.receitaBruta, 'Pedidos confirmados no mês, pela data do pedido') +
+    linhaMov('(−) Descontos concedidos', -d.descontos) +
+    (Math.abs(d.outrasReceitasVendas) > 0.005 ? linhaMov('(+) Outras receitas de vendas', d.outrasReceitasVendas, 'Lançamentos manuais') : '') +
+    linhaMov('(+) Frete cobrado dos clientes', d.frete) +
     linhaMov('(−) Impostos', -d.impostos) +
     linhaSub('(=) Receita Líquida', d.receitaLiquida) +
-    linhaMov('(−) CMV (Custo de Produção)', -d.cmv) +
+    linhaMov('(−) CMV (custo dos produtos vendidos)', -d.cmv, 'Custo da ficha técnica + embalagens, congelado na data da venda') +
     linhaSub('(=) Lucro Bruto', d.lucroBruto) +
-    linhaMov('(−) Despesas de Vendas', -d.despesasVendas) +
+    linhaMov('(−) Taxas de pagamento', -d.taxas, 'Calculadas por pedido (maquininha/cartão)') +
+    (Math.abs(d.despesasVendasManuais) > 0.005 ? linhaMov('(−) Outras despesas de vendas', -d.despesasVendasManuais) : '') +
     linhaMov('(−) Despesas Operacionais', -d.despesasOperacionais) +
     linhaSub('(=) Lucro Operacional', d.lucroOperacional) +
     linhaMov('(+/−) Receitas/Despesas Diversas', d.resultadoDiversos) +
-    linhaSub('(=) Lucro/Prejuízo', d.lucroPrejuizo) +
-    (Math.abs(d.semCategoria) > 0.005 ? `
+    linhaSub('(=) Lucro/Prejuízo do mês', d.lucroPrejuizo) +
+    (Math.abs(d.foraDaDre) > 0.005 ? `
       <tr>
-        <td class="celula-principal" style="color:var(--marrom-cafe);">⚠ Sem categoria (fora da DRE acima)</td>
-        <td style="text-align:right; white-space:nowrap;">${d.semCategoria < 0 ? '− ' : ''}${m(d.semCategoria)}</td>
-      </tr>` : '');
+        <td class="celula-principal" style="color:var(--marrom-cafe);">⚠ Lançamentos manuais sem categoria (fora da DRE acima)</td>
+        <td style="text-align:right; white-space:nowrap;">${d.foraDaDre < 0 ? '− ' : ''}${m(d.foraDaDre)}</td>
+      </tr>` : '') +
+    `<tr><td colspan="2" class="item-sub" style="white-space:normal;">Compras de insumos não entram aqui como despesa: viram custo (CMV) quando o produto é vendido. O fluxo de caixa (dinheiro que entrou e saiu) está nos cartões acima.</td></tr>`;
 }
 
 // --------------------------------------------------------
@@ -225,7 +299,7 @@ function renderizarResumosPorGrupo(lancamentos){
       : '<div class="item-sub">Nenhum lançamento neste grupo no período.</div>';
     return `
       <div class="cartao-item">
-        <div class="titulo-item"><span>${g.label}</span></div>
+        <div class="titulo-item"><span>${g.label} <span class="item-sub">(caixa)</span></span></div>
         ${linhas}
         ${itens.length > 0 ? `<div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;"><span>Total</span><span>${m(total)}</span></div>` : ''}
       </div>

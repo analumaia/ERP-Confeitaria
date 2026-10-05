@@ -217,30 +217,20 @@ async function salvarNovaCompra(){
   btnSalvarCompra.disabled = true;
   btnSalvarCompra.textContent = 'Salvando...';
 
-  const novaCompra = { fornecedor_id: campoFornecedorCompra.value || null, data_compra: dataCompra, status: 'pedido' };
-  if (frete > 0) novaCompra.valor_frete = frete; // só envia quando há frete
-
-  const { data: compraCriada, error: erroCompra } = await supabaseClient.from('compras').insert(novaCompra).select().single();
-
-  if (erroCompra){
-    btnSalvarCompra.disabled = false;
-    btnSalvarCompra.textContent = 'Salvar';
-    const semColunaFrete = String(erroCompra.message || '').includes('valor_frete');
-    mostrarToast(semColunaFrete ? 'O campo de frete ainda não existe no banco — rode o SQL de migração.' : 'Não foi possível criar a compra.', 'erro');
-    return;
-  }
-
-  const { error: erroItens } = await supabaseClient
-    .from('compra_itens')
-    .insert(itens.map(item => ({ ...item, compra_id: compraCriada.id })));
+  // compra + itens gravados juntos numa transação só (função salvar_compra no banco):
+  // se qualquer item falhar, nada é registrado
+  const { error: erroCompra } = await supabaseClient.rpc('salvar_compra', {
+    p_compra: { fornecedor_id: campoFornecedorCompra.value || null, data_compra: dataCompra, valor_frete: frete },
+    p_itens: itens,
+  });
 
   btnSalvarCompra.disabled = false;
   btnSalvarCompra.textContent = 'Salvar';
 
-  if (erroItens){
-    // desfaz a compra vazia pra não sobrar pedido sem itens; o formulário fica como está pra tentar de novo
-    await supabaseClient.from('compras').delete().eq('id', compraCriada.id);
-    mostrarToast('Não foi possível salvar os itens. Nada foi registrado — tente novamente.', 'erro');
+  if (erroCompra){
+    // o formulário fica como está pra tentar de novo
+    const semFuncao = String(erroCompra.message || '').includes('salvar_compra');
+    mostrarToast(semFuncao ? 'A função salvar_compra ainda não existe no banco — rode o SQL migracao-transacoes-e-cmv.sql.' : 'Não foi possível salvar a compra. Nada foi registrado — tente novamente.', 'erro');
     return;
   }
 

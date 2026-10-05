@@ -256,7 +256,7 @@ function renderizarDRE(d){
     linhaMov('(+) Frete cobrado dos clientes', d.frete) +
     linhaMov('(−) Impostos', -d.impostos) +
     linhaSub('(=) Receita Líquida', d.receitaLiquida) +
-    linhaMov('(−) CMV (custo dos produtos vendidos)', -d.cmv, 'Custo da ficha técnica + embalagens, congelado na data da venda') +
+    linhaMov('(−) CMV (custo dos produtos vendidos)', -d.cmv, 'Custo médio da ficha técnica + embalagens, congelado na data da venda') +
     linhaSub('(=) Lucro Bruto', d.lucroBruto) +
     linhaMov('(−) Taxas de pagamento', -d.taxas, 'Calculadas por pedido (maquininha/cartão)') +
     (Math.abs(d.despesasVendasManuais) > 0.005 ? linhaMov('(−) Outras despesas de vendas', -d.despesasVendasManuais) : '') +

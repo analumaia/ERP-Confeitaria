@@ -300,7 +300,7 @@ async function carregarDashboard(){
 
     <!-- 4. Financeiro estratégico -->
     <div class="barra-modulo" style="margin:14px 0 -8px;"><h2>Financeiro estratégico</h2></div>
-    <p class="dash-nota">O lucro daqui é o mesmo da DRE em Controle de caixa (regime de competência): vendas − descontos + frete − impostos − custo dos produtos vendidos (CMV, congelado na data da venda) − taxas − despesas lançadas. Compras de insumos não são despesa até o produto ser vendido.</p>
+    <p class="dash-nota">O lucro daqui é o mesmo da DRE em Controle de caixa (regime de competência): vendas − descontos + frete − impostos − custo dos produtos vendidos (CMV a custo médio, congelado na data da venda) − taxas − despesas lançadas. Compras de insumos não são despesa até o produto ser vendido.</p>
     ${semFicha.length > 0 ? `<p class="dash-nota" style="color:var(--vermelho);">⚠ Vendidos neste mês sem ficha técnica (custo zero, lucro superestimado): ${semFicha.slice(0, 5).map(esc).join(', ')}${semFicha.length > 5 ? ` e mais ${semFicha.length - 5}` : ''}.</p>` : ''}
     <div class="dash-financeiro">
       <div class="cartao-item cartao-grafico">

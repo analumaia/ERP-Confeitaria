@@ -52,7 +52,8 @@ function grupoDoLancamento(l){
   if (l.categorias_financeiras) return l.categorias_financeiras.grupo_dre;
   if (l.origem === 'venda') return 'receita_vendas';
   if (l.origem === 'compra') return 'cmv';
-  if (l.categoria === 'frete de compra') return 'despesas_vendas';
+  if (l.origem === 'taxa_venda') return 'despesas_vendas';
+  if (l.categoria === 'frete de compra') return 'cmv'; // frete pago pra receber insumo é custo do estoque, não despesa de venda
   return null;
 }
 
@@ -67,7 +68,7 @@ function grupoDoLancamento(l){
 //    compra, que já está rateado no custo do insumo) NÃO entram na DRE;
 //  - a receita vem dos pedidos confirmados (data do pedido), com o
 //    desconto como dedução e o frete cobrado como receita;
-//  - a taxa de maquininha é despesa de venda, calculada por pedido;
+//  - a taxa de maquininha é despesa de venda, congelada no pedido (taxa_total);
 //  - o CMV é o custo congelado no momento da venda (pedidos.cmv_total).
 // Lançamentos MANUAIS entram pelo grupo da categoria escolhida.
 // O fluxo de caixa (entradas/saídas) continua existindo à parte,
@@ -75,7 +76,9 @@ function grupoDoLancamento(l){
 // --------------------------------------------------------
 const SELECT_PEDIDOS_RESULTADO = '*, pedido_itens(quantidade, preco_unitario, produto_id, produtos(nome)), pedido_embalagens(quantidade, embalagens(custo_unitario)), formas_pagamento(taxa_percentual)';
 
-const ehLancamentoAutomatico = l => l.origem === 'venda' || l.origem === 'compra';
+// automáticos: venda (receita), compra (estoque + frete de compra) e taxa de maquininha. A DRE calcula
+// tudo isso pelos pedidos/CMV, então não soma esses lançamentos (senão contaria duas vezes)
+const ehLancamentoAutomatico = l => l.origem === 'venda' || l.origem === 'compra' || l.origem === 'taxa_venda';
 
 // Pedidos antigos sem cmv_total (migração ainda não rodada) usam o custo
 // atual da ficha técnica como estimativa — só busca se for preciso
@@ -108,13 +111,17 @@ function calcularResultadoMes(pedidos, lancamentos, custoPorProduto){
     const bruto = pedido.pedido_itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0);
     const desconto = Math.min(bruto, Number(pedido.desconto || 0)); // desconto só incide sobre os itens
     const frete = Number(pedido.valor_frete || 0);
+    // taxa congelada na venda (pedidos.taxa_total); sem ela (migração não rodada) recalcula pelo % atual
     const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
+    const taxaDoPedido = (pedido.taxa_total !== null && pedido.taxa_total !== undefined)
+      ? Number(pedido.taxa_total)
+      : (bruto - desconto + frete) * (taxaPct / 100);
 
     r.receitaBruta += bruto;
     r.descontos += desconto;
     r.receitaProdutos += bruto - desconto;
     r.frete += frete;
-    r.taxas += (bruto - desconto + frete) * (taxaPct / 100); // a taxa incide sobre itens + frete
+    r.taxas += taxaDoPedido; // a taxa incide sobre itens + frete
     r.cmvVendas += cmvDoPedido(pedido, custoPorProduto || {});
     pedido.pedido_itens.forEach(i => { r.produtosVendidos += Number(i.quantidade); });
   });
@@ -196,9 +203,9 @@ async function carregarCaixa(){
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:var(--vermelho);">${formatarMoeda(totalSaidas)}</span></div>
     </div>
     <div class="cartao-item">
-      <div class="titulo-item"><span>Saldo do mês (bruto)</span></div>
+      <div class="titulo-item"><span>Saldo do mês (caixa)</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${saldo >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(saldo)}</span></div>
-      <div class="item-sub">Não desconta taxa de maquininha nem frete das vendas — este cartão é fluxo de caixa. O lucro (por competência) está na DRE abaixo e em "Lucro do mês" na Visão geral.</div>
+      <div class="item-sub">Fluxo de caixa: vendas recebidas (com frete) menos taxa de maquininha, compras recebidas e despesas lançadas. O lucro (por competência) está na DRE abaixo e em "Lucro do mês" na Visão geral.</div>
     </div>
   `;
 
@@ -258,7 +265,7 @@ function renderizarDRE(d){
     linhaSub('(=) Receita Líquida', d.receitaLiquida) +
     linhaMov('(−) CMV (custo dos produtos vendidos)', -d.cmv, 'Custo médio da ficha técnica + embalagens, congelado na data da venda') +
     linhaSub('(=) Lucro Bruto', d.lucroBruto) +
-    linhaMov('(−) Taxas de pagamento', -d.taxas, 'Calculadas por pedido (maquininha/cartão)') +
+    linhaMov('(−) Taxas de pagamento', -d.taxas, 'Congeladas na data da venda (maquininha/cartão)') +
     (Math.abs(d.despesasVendasManuais) > 0.005 ? linhaMov('(−) Outras despesas de vendas', -d.despesasVendasManuais) : '') +
     linhaMov('(−) Despesas Operacionais', -d.despesasOperacionais) +
     linhaSub('(=) Lucro Operacional', d.lucroOperacional) +

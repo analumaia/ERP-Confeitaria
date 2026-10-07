@@ -44,9 +44,15 @@ function calcularPrecificacao(dados, cfg, custoEmbalagemPorProduto){
   let varProducaoTotal = 0;
   let varVendasTotal = 0;
   const naoClassificado = { total: 0, itens: [] };
+  const foraDoCusteio = { total: 0, itens: [] };   // estoque, investimento, aporte: não é custo do período
   let temImpostoFixo = false;
   (dados.lancamentos || []).forEach(l => {
     const total = Number(l.total) || 0;
+    if (l.natureza === 'nenhum'){
+      foraDoCusteio.total += total;
+      foraDoCusteio.itens.push(l);
+      return;
+    }
     if (!l.natureza || !l.aplicacao){
       naoClassificado.total += total;
       naoClassificado.itens.push(l);
@@ -159,7 +165,7 @@ function calcularPrecificacao(dados, cfg, custoEmbalagemPorProduto){
     fixoProducao, fixoVendas, fixoAdministracao, fixosTotal,
     volume, volumeAuto, cifPorUnidade, despesasFixasPorUnidade,
     divisorPisoValido, divisorAlvoValido,
-    naoClassificado, temImpostoFixo,
+    naoClassificado, foraDoCusteio, temImpostoFixo,
     produtos, mcMedia, precoMedio, pontoEquilibrioUnidades, pontoEquilibrioReais,
     faturamentoMensalProjetado, faturamentoAnualProjetado,
   };
@@ -430,7 +436,11 @@ function montarResultadosPrecificacao(k){
   if (j.base === 'mes_atual') alertas.push(['', `Ainda não há meses fechados com movimento: o histórico usa o <strong>mês atual até hoje</strong> (${periodo}). Volume e fixos são parciais — revise as premissas.`]);
   if (k.naoClassificado.total > 0.005){
     const nomes = k.naoClassificado.itens.map(i => esc(i.nome)).join(', ');
-    alertas.push(['grave', `${moedaPrecif(k.naoClassificado.total)} em saídas manuais estão <strong>fora do cálculo</strong> por falta de natureza/aplicação: ${nomes}. Classifique em Configurações → categorias financeiras.`]);
+    alertas.push(['grave', `${moedaPrecif(k.naoClassificado.total)} em saídas manuais estão <strong>fora do cálculo</strong> porque a categoria ainda não foi classificada para o custeio (fixo/variável e onde se aplica): ${nomes}. O lançamento está categorizado; falta classificar a <em>categoria</em> em Configurações → categorias financeiras.`]);
+  }
+  if (k.foraDoCusteio.total > 0.005){
+    const nomesF = k.foraDoCusteio.itens.map(i => esc(i.nome)).join(', ');
+    alertas.push(['', `${moedaPrecif(k.foraDoCusteio.total)} em saídas não entram como custo do período (estoque, investimento ou aporte): ${nomesF}. Insumos e embalagens viram custo só quando o produto é vendido (CMV).`]);
   }
   if (!k.temImpostoFixo && PRECIF.config.fixos_administracao_manual === null) alertas.push(['', 'Nenhum imposto fixo (DAS do MEI) lançado na janela: a estrutura está <strong>subestimada</strong>. Lance o DAS no Controle de caixa (categoria de Impostos, natureza fixo) ou informe a administração nas premissas.']);
   if (k.proLabore <= 0) alertas.push(['', 'Pró-labore em R$ 0: os preços não remuneram o seu trabalho — só cobrem custos e lucro.']);

@@ -263,10 +263,11 @@ async function carregarCategoriasFinanceiras(){
 }
 
 // Natureza e aplicação servem ao custeio (página Precificação), não à DRE
-const NATUREZAS_CUSTO = [{ codigo: 'fixo', label: 'Fixo (não muda com as vendas)' }, { codigo: 'variavel', label: 'Variável (acompanha as vendas)' }];
+const NATUREZAS_CUSTO = [{ codigo: 'fixo', label: 'Fixo (não muda com as vendas)' }, { codigo: 'variavel', label: 'Variável (acompanha as vendas)' }, { codigo: 'nenhum', label: 'Fora do custeio (estoque, investimento, aporte)' }];
 const APLICACOES_CUSTO = [{ codigo: 'producao', label: 'Produção (cozinha)' }, { codigo: 'vendas', label: 'Vendas / entrega' }, { codigo: 'administracao', label: 'Administração' }];
 
 function rotuloCustoCategoria(c){
+  if (c.natureza === 'nenhum') return 'Fora do custeio (estoque/investimento)';
   const n = NATUREZAS_CUSTO.find(x => x.codigo === c.natureza);
   const a = APLICACOES_CUSTO.find(x => x.codigo === c.aplicacao);
   if (!n || !a) return '⚠ Sem natureza/aplicação (fica fora da Precificação)';
@@ -307,7 +308,7 @@ function abrirModalCategoriaFinanceira(categoriaExistente){
     <div class="form-grupo">
       <label for="campoAplicacaoCategoriaFinanceira">Onde é aplicado (só para saídas)</label>
       <select id="campoAplicacaoCategoriaFinanceira">${opcoesCustoHtml(APLICACOES_CUSTO, categoriaExistente ? categoriaExistente.aplicacao : null)}</select>
-      <span class="item-sub" style="white-space:normal;">Ex.: gás e energia da cozinha = Fixo · Produção; DAS do MEI = Fixo · Administração; entrega ao cliente = Variável · Vendas. Alimenta a página Precificação.</span>
+      <span class="item-sub" style="white-space:normal;">Ex.: gás e energia da cozinha = Fixo · Produção; compra de insumo/embalagem e equipamento = Fora do custeio (viram custo pelo CMV/depreciação); DAS do MEI = Fixo · Administração; entrega ao cliente = Variável · Vendas. Alimenta a página Precificação.</span>
     </div>
   `;
   modalOverlay.classList.add('aberto');
@@ -321,7 +322,12 @@ async function salvarNovaCategoriaFinanceira(){
   const grupoDre = document.getElementById('campoGrupoCategoriaFinanceira').value;
   // natureza/aplicação só fazem sentido para saída; entrada fica sem
   const natureza = tipo === 'saida' ? (document.getElementById('campoNaturezaCategoriaFinanceira').value || null) : null;
-  const aplicacao = tipo === 'saida' ? (document.getElementById('campoAplicacaoCategoriaFinanceira').value || null) : null;
+  let aplicacao = tipo === 'saida' ? (document.getElementById('campoAplicacaoCategoriaFinanceira').value || null) : null;
+  if (natureza === 'nenhum') aplicacao = null; // fora do custeio: não tem onde aplicar
+  if (natureza && natureza !== 'nenhum' && !aplicacao){
+    mostrarToast('Informe também onde o custo é aplicado (produção, vendas ou administração).', 'erro');
+    return;
+  }
   const id = modoModal.id;
 
   if (!nome){

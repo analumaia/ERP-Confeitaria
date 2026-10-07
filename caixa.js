@@ -422,6 +422,7 @@ const ROTULO_APLICACAO_CURTO = { producao: 'Produção', vendas: 'Vendas', admin
 
 function custeioCurtoCategoria(c){
   if (c.tipo !== 'saida') return '';
+  if (c.natureza === 'nenhum') return ' · fora do custeio';
   return (c.natureza && c.aplicacao)
     ? ` · ${ROTULO_NATUREZA_CURTO[c.natureza]} / ${ROTULO_APLICACAO_CURTO[c.aplicacao]}`
     : ' · ⚠ sem natureza/aplicação';
@@ -460,7 +461,7 @@ function abrirModalAlterarCategoriaLancamento(id){
     const c = categoriasFinanceirasAtivas.find(x => String(x.id) === select.value);
     if (!select.value){
       aviso.textContent = 'Sem categoria: o lançamento fica fora da DRE e da Precificação.';
-    } else if (c && c.tipo === 'saida' && (!c.natureza || !c.aplicacao)){
+    } else if (c && c.tipo === 'saida' && c.natureza !== 'nenhum' && (!c.natureza || !c.aplicacao)){
       aviso.textContent = 'Esta categoria ainda não tem natureza/aplicação: a Precificação vai ignorar este lançamento. Ajuste em Configurações → Categorias financeiras.';
     } else {
       aviso.textContent = '';

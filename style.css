@@ -1335,3 +1335,26 @@ h1, h2, h3, .fonte-titulo{
 .cabecalho-emb{ display: grid; grid-template-columns: minmax(0, 1fr) 58px 70px 36px; gap: 6px; font-size: 0.7rem; color: var(--marrom-cafe); margin-bottom: 4px; padding: 0 8px; }
 .quebra{ display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px dashed var(--bege-escuro); font-size: 0.84rem; }
 .quebra.total{ font-weight: 700; border-bottom: none; }
+
+
+/* ============================================================
+   RELATÓRIO DRE
+   ============================================================ */
+.dre-controles{ flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; }
+.dre-campo{ display: flex; flex-direction: column; gap: 4px; }
+.dre-campo .campo-busca{ max-width: 200px; }
+.dre-mes{ display: flex; align-items: center; gap: 6px; }
+.dre-mes .btn-acao{ flex: none; padding: 8px 14px; font-size: 1rem; line-height: 1; }
+.dre-tabela{ min-width: 100%; }
+.dre-tabela th, .dre-tabela td{ padding: 10px 12px; vertical-align: top; }
+.dre-tabela .dre-rot{ text-align: left; min-width: 250px; position: sticky; left: 0; background: var(--branco); z-index: 1; }
+.dre-tabela .dre-num{ text-align: right; white-space: nowrap; min-width: 96px; }
+.dre-tabela .dre-sub{ display: block; font-size: 0.64rem; font-weight: 500; color: var(--marrom-cafe); text-transform: none; letter-spacing: 0; }
+.dre-tabela .dre-total{ background: var(--bege-claro); font-weight: 700; }
+.dre-tabela .dre-av{ color: var(--marrom-cafe); font-size: 0.8rem; min-width: 110px; }
+.dre-tabela .dre-linha-sub td{ font-weight: 700; background: var(--bege-claro); }
+.dre-tabela .dre-linha-sub .dre-rot{ background: var(--bege-claro); }
+.dre-tabela .dre-linha-final td{ font-weight: 800; background: var(--bege-escuro); border-top: 2px solid var(--marrom-claro); }
+.dre-tabela .dre-linha-final .dre-rot{ background: var(--bege-escuro); }
+.dre-tabela .dre-linha-info td{ font-size: 0.82rem; color: var(--marrom-cafe); }
+.dre-tabela .dre-rot .item-sub{ display: block; font-weight: 400; white-space: normal; }

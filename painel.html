@@ -364,14 +364,7 @@
 
     <div class="lista-cards" id="resumoCaixa" style="margin-bottom:16px;"></div>
 
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">DRE resumida</h3>
-    <div class="cartao-item relatorio-cadastro" style="margin-bottom:20px;">
-      <div class="tabela-container">
-        <table class="tabela-movimentacoes">
-          <tbody id="corpoDreCaixa"></tbody>
-        </table>
-      </div>
-    </div>
+    <div class="item-sub" style="white-space:normal; margin-bottom:16px;">O resultado por competência (lucro, CMV, margens) fica em <strong>Financeiro → Relatório DRE</strong>. Aqui você vê só o dinheiro que entrou e saiu.</div>
 
     <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Resumo por grupo</h3>
     <div class="lista-cards" id="gradeResumosCaixa" style="margin-bottom:20px;"></div>
@@ -401,6 +394,54 @@
         </table>
       </div>
     </div>
+  </section>
+
+  <!-- RELATÓRIO DRE (conteúdo montado por dre.js) -->
+  <section class="conteudo-modulo" data-modulo="dre">
+    <div class="barra-modulo"><h2>Relatório DRE</h2></div>
+
+    <div class="cartao-item dre-controles">
+      <div class="dre-campo">
+        <label for="dreModo" class="item-sub">Ver</label>
+        <select id="dreModo" class="campo-busca">
+          <option value="mes">Um mês</option>
+          <option value="periodo">Período</option>
+        </select>
+      </div>
+      <div class="dre-campo" id="dreBlocoMes">
+        <label for="dreMes" class="item-sub">Mês</label>
+        <div class="dre-mes">
+          <button type="button" class="btn-acao" id="dreMesAnterior" aria-label="Mês anterior">‹</button>
+          <input type="month" id="dreMes" class="campo-busca">
+          <button type="button" class="btn-acao" id="dreMesSeguinte" aria-label="Mês seguinte">›</button>
+        </div>
+      </div>
+      <div class="dre-campo" id="dreBlocoPeriodo" style="display:none;">
+        <label for="dreDe" class="item-sub">De / até</label>
+        <div class="dre-mes">
+          <input type="date" id="dreDe" class="campo-busca">
+          <input type="date" id="dreAte" class="campo-busca">
+        </div>
+      </div>
+      <div class="dre-campo">
+        <label for="dreAtalhos" class="item-sub">Atalhos</label>
+        <select id="dreAtalhos" class="campo-busca">
+          <option value="">Escolher...</option>
+          <option value="3m">Últimos 3 meses</option>
+          <option value="6m">Últimos 6 meses</option>
+          <option value="ano">Este ano</option>
+          <option value="ano_passado">Ano passado</option>
+        </select>
+      </div>
+      <div class="dre-campo" style="margin-left:auto;">
+        <button type="button" class="btn-secundario" id="dreBaixarCsv">Baixar CSV</button>
+      </div>
+    </div>
+    <div class="item-sub" id="dreAviso" style="margin:6px 2px;"></div>
+
+    <div class="lista-cards" id="dreResumo" style="margin:16px 0;"></div>
+    <div id="dreCorpo"><div class="lista-vazia">Carregando...</div></div>
+    <div id="dreComposicao"></div>
   </section>
 
   <!-- PRECIFICAÇÃO (conteúdo montado por precificacao.js) -->
@@ -839,6 +880,7 @@
 <script src="vendas.js"></script>
 <script src="caixa.js"></script>
 <script src="configuracoes.js"></script>
+<script src="dre.js"></script>
 <script src="precificacao.js"></script>
 <script src="init.js"></script>
 </body>

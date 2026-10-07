@@ -1,6 +1,6 @@
 /* ============================================================
    CONTROLE DE CAIXA — entradas e saídas da empresa: resumo do
-   período, DRE resumida, resumo por grupo do DRE, relatório dos
+   período, resumo por grupo do DRE, relatório dos
    lançamentos em tabela, e o lançamento manual (agora com
    categoria de verdade, não mais texto livre).
 
@@ -166,7 +166,7 @@ async function carregarCaixa(){
   containerResumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
   corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Carregando...</td></tr>';
 
-  const [respLancamentos, respCategorias, respPedidos] = await Promise.all([
+  const [respLancamentos, respCategorias] = await Promise.all([
     supabaseClient
       .from('lancamentos_financeiros')
       .select('*, categorias_financeiras(nome, grupo_dre)')
@@ -175,10 +175,9 @@ async function carregarCaixa(){
       .order('data', { ascending: false })
       .order('criado_em', { ascending: false }),
     supabaseClient.from('categorias_financeiras').select('*').eq('ativo', true).order('nome'),
-    supabaseClient.from('pedidos').select(SELECT_PEDIDOS_RESULTADO).eq('status', 'confirmado').gte('data_pedido', primeiroDia).lte('data_pedido', ultimoDia),
   ]);
 
-  if (respLancamentos.error || respPedidos.error){
+  if (respLancamentos.error){
     containerResumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o controle de caixa.</div>';
     corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Não foi possível carregar os lançamentos. Se ainda não rodou, execute o SQL <strong>migracao-categorias-financeiras.sql</strong> no Supabase.</td></tr>';
     mostrarToast('Erro ao carregar o controle de caixa.', 'erro');
@@ -206,13 +205,10 @@ async function carregarCaixa(){
     <div class="cartao-item">
       <div class="titulo-item"><span>Saldo do mês (caixa)</span></div>
       <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${saldo >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(saldo)}</span></div>
-      <div class="item-sub">Fluxo de caixa: vendas recebidas (com frete) menos taxa de maquininha, compras recebidas e despesas lançadas. O lucro (por competência) está na DRE abaixo e em "Lucro do mês" na Visão geral.</div>
+      <div class="item-sub">Fluxo de caixa: vendas recebidas (com frete) menos taxa de maquininha, compras recebidas e despesas lançadas. O lucro por competência está em Financeiro → Relatório DRE.</div>
     </div>
   `;
 
-  const pedidosDoMes = respPedidos.data || [];
-  const custoPorProduto = await buscarCustoUnitarioPorProduto(pedidosDoMes);
-  renderizarDRE(calcularResultadoMes(pedidosDoMes, data, custoPorProduto));
   renderizarResumosPorGrupo(data);
 
   if (data.length === 0){
@@ -240,50 +236,6 @@ async function carregarCaixa(){
   corpo.querySelectorAll('[data-alterar-categoria-lancamento]').forEach(botao => {
     botao.addEventListener('click', () => abrirModalAlterarCategoriaLancamento(botao.dataset.alterarCategoriaLancamento));
   });
-}
-
-// --------------------------------------------------------
-// DRE (regime de competência) — recebe o resultado já calculado por
-// calcularResultadoMes. Receita de Vendas → Impostos → Receita
-// Líquida → CMV → Lucro Bruto → Despesas de Vendas/Operacionais →
-// Lucro Operacional → Receitas/Despesas Diversas → Lucro/Prejuízo.
-// --------------------------------------------------------
-function renderizarDRE(d){
-  const corpo = document.getElementById('corpoDreCaixa');
-  const m = v => Math.abs(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  const linhaMov = (label, valor, nota) => `
-    <tr>
-      <td class="celula-principal">${label}${nota ? `<span class="item-sub">${nota}</span>` : ''}</td>
-      <td style="text-align:right; white-space:nowrap; color:${valor < 0 ? 'var(--vermelho)' : 'var(--verde)'};">${valor < 0 ? '− ' : ''}${m(valor)}</td>
-    </tr>`;
-  const linhaSub = (label, valor) => `
-    <tr style="font-weight:700; background:var(--bege-claro);">
-      <td class="celula-principal">${label}</td>
-      <td style="text-align:right; white-space:nowrap; color:${valor < 0 ? 'var(--vermelho)' : 'inherit'};">${valor < 0 ? '− ' : ''}${m(valor)}</td>
-    </tr>`;
-
-  corpo.innerHTML =
-    linhaMov('(+) Receita de vendas (produtos)', d.receitaBruta, 'Pedidos confirmados no mês, pela data do pedido') +
-    linhaMov('(−) Descontos concedidos', -d.descontos) +
-    (Math.abs(d.outrasReceitasVendas) > 0.005 ? linhaMov('(+) Outras receitas de vendas', d.outrasReceitasVendas, 'Lançamentos manuais') : '') +
-    linhaMov('(+) Frete cobrado dos clientes', d.frete) +
-    linhaMov('(−) Impostos', -d.impostos) +
-    linhaSub('(=) Receita Líquida', d.receitaLiquida) +
-    linhaMov('(−) CMV (custo dos produtos vendidos)', -d.cmv, 'Custo médio da ficha técnica + embalagens, congelado na data da venda') +
-    linhaSub('(=) Lucro Bruto', d.lucroBruto) +
-    linhaMov('(−) Taxas de pagamento', -d.taxas, 'Congeladas na data da venda (maquininha/cartão)') +
-    (Math.abs(d.despesasVendasManuais) > 0.005 ? linhaMov('(−) Outras despesas de vendas', -d.despesasVendasManuais) : '') +
-    linhaMov('(−) Despesas Operacionais', -d.despesasOperacionais) +
-    linhaSub('(=) Lucro Operacional', d.lucroOperacional) +
-    linhaMov('(+/−) Receitas/Despesas Diversas', d.resultadoDiversos) +
-    linhaSub('(=) Lucro/Prejuízo do mês', d.lucroPrejuizo) +
-    (Math.abs(d.foraDaDre) > 0.005 ? `
-      <tr>
-        <td class="celula-principal" style="color:var(--marrom-cafe);">⚠ Lançamentos manuais sem categoria (fora da DRE acima)</td>
-        <td style="text-align:right; white-space:nowrap;">${d.foraDaDre < 0 ? '− ' : ''}${m(d.foraDaDre)}</td>
-      </tr>` : '') +
-    `<tr><td colspan="2" class="item-sub" style="white-space:normal;">Compras de insumos não entram aqui como despesa: viram custo (CMV) quando o produto é vendido. O fluxo de caixa (dinheiro que entrou e saiu) está nos cartões acima.</td></tr>`;
 }
 
 // --------------------------------------------------------

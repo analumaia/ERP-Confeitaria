@@ -1265,42 +1265,32 @@ h1, h2, h3, .fonte-titulo{
 
 /* ---------------------------------------------------------
    PRECIFICAÇÃO (custeio variável, por absorção e pleno)
+   Reaproveita: compras-layout / cartao-nova-compra (premissas),
+   kpi-grid / kpi (indicadores), relatorio-produtos (tabela)
 --------------------------------------------------------- */
-.precif-grade{
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 6px 14px;
-  margin: 12px 0 8px;
-}
-.precif-grade.larga{ grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 14px 0; }
-.precif-grade .form-grupo{ margin-bottom: 8px; }
-.precif-grade .form-grupo .item-sub{ display: block; margin-top: 4px; }
+#precifPremissas .form-grupo .item-sub{ display: block; margin: 4px 0 0 4px; }
+#precifPremissas .form-linha-dupla{ align-items: start; }
 
 .precif-alerta{
   background: #fff3d6;
   color: #7a5400;
   border-radius: 10px;
   padding: 10px 14px;
-  margin: 8px 0;
-  font-size: 0.84rem;
+  margin: 0 0 10px;
+  font-size: 0.82rem;
 }
 .precif-alerta.grave{ background: var(--vermelho-bg); color: var(--vermelho); }
 
-.precif-tabela{ min-width: 940px; }
+.precif-tabela{ min-width: 980px; }
 .precif-tabela th{ white-space: normal; }
-.precif-tabela th, .precif-tabela td{ padding-left: 8px; padding-right: 8px; }
-.precif-tabela th, .precif-tabela td{ text-align: right; vertical-align: top; }
-.precif-tabela th:first-child, .precif-tabela td:first-child{ text-align: left; white-space: normal; min-width: 150px; }
-.precif-tabela td.alinha-esq, .precif-tabela th.alinha-esq{ text-align: left; }
+.precif-tabela th, .precif-tabela td{ text-align: right; vertical-align: top; padding-left: 8px; padding-right: 8px; }
+.precif-tabela th:first-child, .precif-tabela td:first-child{ text-align: left; white-space: normal; min-width: 150px; padding-left: 14px; }
+.precif-tabela .alinha-esq{ text-align: left; }
 .precif-tabela td small{ display: block; font-size: 0.7rem; font-weight: 500; color: var(--marrom-cafe); }
 .precif-tabela td.num-forte{ font-weight: 700; }
-.precif-tabela thead tr.grupos th{
-  text-align: center;
-  background: var(--bege-escuro);
-  border-bottom: 2px solid var(--bege);
-}
+.precif-tabela thead tr.grupos th{ text-align: center; background: var(--bege-escuro); }
 .precif-tabela input[type="number"]{
-  width: 92px;
+  width: 88px;
   padding: 6px 10px;
   border-radius: 999px;
   border: 1.5px solid var(--marrom-claro);
@@ -1328,12 +1318,11 @@ h1, h2, h3, .fonte-titulo{
 .selo.atinge_alvo{ background: var(--verde-bg); color: var(--verde); }
 .selo.indefinida{ background: var(--bege); color: var(--marrom-cafe); }
 
-.detalhe-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
-.detalhe-grid h4{ margin: 0 0 8px; font-size: 0.92rem; font-family: var(--fonte-corpo); font-weight: 700; }
+.detalhe-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 26px; margin-top: 6px; }
+.detalhe-grid .form-grupo input{ border-radius: 999px; padding: 10px 16px; }
+.detalhe-grid .compra-linha-item{ grid-template-columns: minmax(0, 1fr) 58px 70px 36px; gap: 6px; margin-bottom: 8px; }
 .detalhe-grid .compra-linha-item input{ padding: 10px 4px; text-align: center; }
 .detalhe-grid .compra-linha-item select{ padding: 10px 10px; }
-.detalhe-grid .compra-linha-item{ grid-template-columns: minmax(0, 1fr) 58px 70px 36px; gap: 6px; margin-bottom: 8px; }
-.cabecalho-emb{ display: grid; grid-template-columns: minmax(0, 1fr) 58px 70px 36px; gap: 6px; font-size: 0.7rem; color: var(--marrom-cafe); margin-bottom: 4px; padding: 0 6px; }
-.quebra{ display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed var(--bege-escuro); font-size: 0.84rem; }
+.cabecalho-emb{ display: grid; grid-template-columns: minmax(0, 1fr) 58px 70px 36px; gap: 6px; font-size: 0.7rem; color: var(--marrom-cafe); margin-bottom: 4px; padding: 0 8px; }
+.quebra{ display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px dashed var(--bege-escuro); font-size: 0.84rem; }
 .quebra.total{ font-weight: 700; border-bottom: none; }
-.legenda{ font-size: 0.78rem; color: var(--marrom-cafe); margin-top: 12px; line-height: 1.55; }

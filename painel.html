@@ -405,9 +405,19 @@
   <!-- PRECIFICAÇÃO (conteúdo montado por precificacao.js) -->
   <section class="conteudo-modulo" id="moduloPrecificacao" data-modulo="precificacao">
     <div class="barra-modulo"><h2>Precificação</h2></div>
-    <p class="dash-nota" style="margin:-6px 0 14px;">Três camadas de preço por produto: o <strong>preço mínimo</strong> (custeio variável), o preço que <strong>cobre a produção</strong> (custeio por absorção) e o <strong>preço-alvo</strong> (custeio pleno, com seu lucro desejado).</p>
-    <div id="precifPremissas"></div>
-    <div id="precifResultados"><div class="lista-vazia">Carregando...</div></div>
+
+    <div class="compras-layout">
+      <!-- Premissas (formulário fixo, igual a Compras/Produção) -->
+      <form class="cartao-item cartao-nova-compra" id="precifPremissas" novalidate></form>
+
+      <!-- Alertas e indicadores -->
+      <div id="precifResumo"></div>
+    </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Preços por produto</h3>
+    <div id="precifTabela"><div class="lista-vazia">Carregando...</div></div>
+    <div id="precifDetalhe"></div>
+    <div id="precifLegenda"></div>
   </section>
 
   <!-- INSUMOS -->

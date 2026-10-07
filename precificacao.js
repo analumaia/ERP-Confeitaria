@@ -200,60 +200,34 @@ const CONFIG_PADRAO_PRECIFICACAO = {
 };
 
 (function montarSecaoPrecificacao(){
-  if (document.getElementById('moduloPrecificacao')) return;
-  const referencia = document.querySelector('.conteudo-modulo');
-  if (!referencia) return;
-
-  const estilo = document.createElement('style');
-  estilo.textContent = `
-    #moduloPrecificacao .precif-grade { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px; margin:12px 0; }
-    #moduloPrecificacao .precif-grade.larga { grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); }
-    #moduloPrecificacao .precif-campo label { display:block; font-size:.78rem; font-weight:600; margin-bottom:4px; }
-    #moduloPrecificacao .precif-campo input, #moduloPrecificacao .precif-campo select { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #d8cfc4; border-radius:8px; font:inherit; background:#fff; }
-    #moduloPrecificacao .precif-campo .dica { display:block; font-size:.72rem; opacity:.7; margin-top:3px; }
-    #moduloPrecificacao .precif-alerta { border-left:4px solid #d9822b; background:#fff7ec; padding:10px 12px; border-radius:6px; margin:8px 0; font-size:.85rem; }
-    #moduloPrecificacao .precif-alerta.grave { border-left-color:#c0392b; background:#fdeeee; }
-    #moduloPrecificacao .precif-tabela-wrap { overflow-x:auto; margin-top:10px; }
-    #moduloPrecificacao table.precif-tabela { border-collapse:collapse; width:100%; min-width:980px; font-size:.84rem; }
-    #moduloPrecificacao .precif-tabela th, #moduloPrecificacao .precif-tabela td { padding:8px 10px; border-bottom:1px solid #eee4d8; text-align:right; vertical-align:top; white-space:nowrap; }
-    #moduloPrecificacao .precif-tabela th:first-child, #moduloPrecificacao .precif-tabela td:first-child { text-align:left; white-space:normal; }
-    #moduloPrecificacao .precif-tabela thead th { font-size:.74rem; text-transform:uppercase; letter-spacing:.03em; opacity:.8; }
-    #moduloPrecificacao .precif-tabela thead tr.grupos th { text-align:center; border-bottom:0; padding-bottom:0; }
-    #moduloPrecificacao .precif-tabela small { display:block; opacity:.65; font-size:.72rem; }
-    #moduloPrecificacao .precif-tabela td.num-forte { font-weight:700; }
-    #moduloPrecificacao .selo { display:inline-block; padding:2px 8px; border-radius:20px; font-size:.72rem; font-weight:700; white-space:normal; }
-    #moduloPrecificacao .selo.abaixo_piso { background:#fbd9d5; color:#8e2316; }
-    #moduloPrecificacao .selo.cobre_variavel { background:#fde3c8; color:#8a4a0b; }
-    #moduloPrecificacao .selo.cobre_producao { background:#fdf0c2; color:#6f5a00; }
-    #moduloPrecificacao .selo.cobre_tudo { background:#e4f1c9; color:#3f5a0b; }
-    #moduloPrecificacao .selo.atinge_alvo { background:#cdeedb; color:#1b6b3c; }
-    #moduloPrecificacao .selo.indefinida { background:#eee; color:#555; }
-    #moduloPrecificacao tr.detalhe td { background:#fbf7f1; text-align:left; white-space:normal; }
-    #moduloPrecificacao .detalhe-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px; }
-    #moduloPrecificacao .detalhe-grid h4 { margin:0 0 8px; font-size:.9rem; }
-    #moduloPrecificacao .linha-emb { display:grid; grid-template-columns:minmax(120px,2fr) 70px 80px 32px; gap:6px; align-items:center; margin-bottom:6px; }
-    #moduloPrecificacao .linha-emb input, #moduloPrecificacao .linha-emb select { padding:6px 8px; border:1px solid #d8cfc4; border-radius:6px; font:inherit; min-width:0; }
-    #moduloPrecificacao .quebra { display:flex; justify-content:space-between; gap:12px; padding:3px 0; border-bottom:1px dashed #e6dccf; font-size:.84rem; }
-    #moduloPrecificacao .quebra.total { font-weight:700; border-bottom:0; }
-    #moduloPrecificacao .legenda { font-size:.78rem; opacity:.8; margin-top:10px; line-height:1.5; }
-  `;
-  document.head.appendChild(estilo);
-
-  const secao = document.createElement(referencia.tagName);
-  secao.className = 'conteudo-modulo';
-  secao.dataset.modulo = 'precificacao';
-  secao.id = 'moduloPrecificacao';
-  secao.innerHTML = `
-    <div class="barra-modulo"><h2>Precificação</h2></div>
-    <div id="precifPremissas"></div>
-    <div id="precifResultados"><div class="lista-vazia">Carregando...</div></div>
-  `;
-  referencia.parentNode.appendChild(secao);
+  // a seção já vem do painel.html; se faltar, cria uma equivalente (o estilo está no style.css)
+  let secao = document.getElementById('moduloPrecificacao');
+  if (!secao){
+    const referencia = document.querySelector('.conteudo-modulo');
+    if (!referencia) return;
+    secao = document.createElement(referencia.tagName);
+    secao.className = 'conteudo-modulo';
+    secao.dataset.modulo = 'precificacao';
+    secao.id = 'moduloPrecificacao';
+    secao.innerHTML = `
+      <div class="barra-modulo"><h2>Precificação</h2></div>
+      <div class="compras-layout">
+        <form class="cartao-item cartao-nova-compra" id="precifPremissas" novalidate></form>
+        <div id="precifResumo"></div>
+      </div>
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Preços por produto</h3>
+      <div id="precifTabela"><div class="lista-vazia">Carregando...</div></div>
+      <div id="precifDetalhe"></div>
+      <div id="precifLegenda"></div>
+    `;
+    referencia.parentNode.appendChild(secao);
+  }
 
   // delegação de eventos: um só ouvinte por tipo, para sobreviver aos re-renders
   secao.addEventListener('input', aoDigitarPrecificacao);
   secao.addEventListener('change', aoAlterarPrecificacao);
   secao.addEventListener('click', aoClicarPrecificacao);
+  secao.addEventListener('submit', evento => { evento.preventDefault(); salvarPremissasPrecificacao(); });
 })();
 
 // --------------------------------------------------------
@@ -277,7 +251,7 @@ const ROTULO_SITUACAO = {
 // CARGA
 // --------------------------------------------------------
 async function carregarPrecificacao(){
-  const resultados = document.getElementById('precifResultados');
+  const resultados = document.getElementById('precifTabela');
   if (!resultados) return;
   resultados.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
@@ -325,45 +299,52 @@ async function carregarPrecificacao(){
 function renderizarPremissasPrecificacao(){
   const c = PRECIF.config;
   const val = v => (v === null || v === undefined) ? '' : v;
+  const campo = (id, rotulo, valor, extra, dica) => `
+    <div class="form-grupo">
+      <label for="${id}">${rotulo}</label>
+      <input type="number" id="${id}" min="0" step="any" value="${val(valor)}" ${extra || ''}>
+      <span class="item-sub" ${dica && dica.startsWith('#') ? `id="${dica.slice(1)}"` : ''}>${dica && !dica.startsWith('#') ? dica : ''}</span>
+    </div>`;
   document.getElementById('precifPremissas').innerHTML = `
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Premissas</span></div>
-      <div class="item-sub" style="white-space:normal;">Campos em branco usam o valor calculado pelo histórico. O que você altera aqui recalcula a tabela na hora; clique em <strong>Salvar premissas</strong> para guardar.</div>
-      <div class="precif-grade">
-        <div class="precif-campo"><label for="pcPro">Pró-labore mensal (R$)</label>
-          <input type="number" id="pcPro" min="0" step="any" value="${val(c.pro_labore_mensal)}">
-          <span class="dica">Quanto você quer retirar pelo seu trabalho. Não lance o pró-labore no caixa como despesa: ele entra só aqui.</span></div>
-        <div class="precif-campo"><label for="pcProProd">% do pró-labore que é produção</label>
-          <input type="number" id="pcProProd" min="0" max="100" step="any" value="${val(c.pct_pro_labore_producao)}">
-          <span class="dica">O resto conta como administração/vendas.</span></div>
-        <div class="precif-campo"><label for="pcLucro">Lucro desejado (% do preço)</label>
-          <input type="number" id="pcLucro" min="0" max="99" step="any" value="${val(c.lucro_desejado_pct)}">
-          <span class="dica">Além do pró-labore: é o retorno do negócio.</span></div>
-        <div class="precif-campo"><label for="pcTaxa">Taxa de maquininha média (%)</label>
-          <input type="number" id="pcTaxa" min="0" max="99" step="any" value="${val(c.taxa_pct_manual)}" placeholder="auto">
-          <span class="dica" id="pcTaxaDica"></span></div>
-        <div class="precif-campo"><label for="pcMeses">Meses de histórico</label>
-          <input type="number" id="pcMeses" min="1" max="12" step="1" value="${val(c.meses_historico)}">
-          <span class="dica">Meses fechados antes do atual. Muda ao salvar.</span></div>
-        <div class="precif-campo"><label for="pcVolume">Volume mensal (unidades)</label>
-          <input type="number" id="pcVolume" min="0" step="any" value="${val(c.volume_mensal_manual)}" placeholder="auto">
-          <span class="dica" id="pcVolumeDica"></span></div>
-        <div class="precif-campo"><label for="pcFixProd">Fixos de produção/mês (R$)</label>
-          <input type="number" id="pcFixProd" min="0" step="any" value="${val(c.fixos_producao_manual)}" placeholder="auto">
-          <span class="dica" id="pcFixProdDica"></span></div>
-        <div class="precif-campo"><label for="pcFixVend">Fixos de vendas/mês (R$)</label>
-          <input type="number" id="pcFixVend" min="0" step="any" value="${val(c.fixos_vendas_manual)}" placeholder="auto">
-          <span class="dica" id="pcFixVendDica"></span></div>
-        <div class="precif-campo"><label for="pcFixAdm">Fixos de administração/mês (R$)</label>
-          <input type="number" id="pcFixAdm" min="0" step="any" value="${val(c.fixos_administracao_manual)}" placeholder="auto">
-          <span class="dica" id="pcFixAdmDica">Inclui o DAS do MEI (fixo).</span></div>
-        <div class="precif-campo"><label for="pcLimite">Limite anual de faturamento MEI (R$)</label>
-          <input type="number" id="pcLimite" min="0" step="any" value="${val(c.limite_faturamento_anual)}">
-          <span class="dica">Confira o valor vigente.</span></div>
+    <div class="compra-corpo">
+      <h3 class="compra-titulo">Premissas</h3>
+      <div class="item-sub" style="margin:-6px 0 12px;">Campos em branco usam o valor calculado pelo histórico. A tabela recalcula enquanto você digita; clique em Salvar para guardar.</div>
+
+      <div class="compra-secao-titulo">Seu trabalho e seu lucro</div>
+      <div class="form-linha-dupla">
+        ${campo('pcPro', 'Pró-labore mensal (R$)', c.pro_labore_mensal, '', 'Não lance o pró-labore no caixa: ele entra só aqui.')}
+        ${campo('pcProProd', '% do pró-labore na produção', c.pct_pro_labore_producao, 'max="100"', 'O resto conta como administração.')}
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button type="button" class="btn-acao" style="background:var(--verde); color:#fff; border-color:var(--verde);" id="btnSalvarPremissasPrecif" data-acao-precif="salvar-premissas">Salvar premissas</button>
+      <div class="form-linha-dupla">
+        ${campo('pcLucro', 'Lucro desejado (% do preço)', c.lucro_desejado_pct, 'max="99"', 'Retorno do negócio, além do pró-labore.')}
+        ${campo('pcTaxa', 'Taxa de maquininha (%)', c.taxa_pct_manual, 'max="99" placeholder="auto"', '#pcTaxaDica')}
       </div>
+
+      <div class="compra-secao-titulo">Volume e histórico</div>
+      <div class="form-linha-dupla">
+        ${campo('pcVolume', 'Volume mensal (unidades)', c.volume_mensal_manual, 'placeholder="auto"', '#pcVolumeDica')}
+        ${campo('pcMeses', 'Meses de histórico', c.meses_historico, 'max="12" step="1"', 'Meses fechados. Muda ao salvar.')}
+      </div>
+
+      <div class="compra-secao-titulo">Custos fixos por mês (R$)</div>
+      <div class="form-linha-dupla">
+        ${campo('pcFixProd', 'Produção', c.fixos_producao_manual, 'placeholder="auto"', '#pcFixProdDica')}
+        ${campo('pcFixVend', 'Vendas', c.fixos_vendas_manual, 'placeholder="auto"', '#pcFixVendDica')}
+      </div>
+      <div class="form-linha-dupla">
+        ${campo('pcFixAdm', 'Administração (inclui o DAS)', c.fixos_administracao_manual, 'placeholder="auto"', '#pcFixAdmDica')}
+        ${campo('pcLimite', 'Limite anual do MEI (R$)', c.limite_faturamento_anual, '', 'Confira o valor vigente.')}
+      </div>
+    </div>
+
+    <div class="compra-rodape-frete">
+      <div class="compra-frete-linha"><span>Custos fixos por mês</span><span id="precifRodapeFixos">—</span></div>
+      <div class="compra-total-linha"><span>Rateio por unidade</span><span id="precifRodapeRateio">—</span></div>
+    </div>
+
+    <div class="compra-acoes">
+      <button type="button" class="compra-btn-cancelar" data-acao-precif="restaurar-premissas">Cancelar</button>
+      <button type="submit" class="compra-btn-salvar" id="btnSalvarPremissasPrecif">Salvar</button>
     </div>
   `;
 }
@@ -406,7 +387,7 @@ async function salvarPremissasPrecificacao(){
   });
 
   botao.disabled = false;
-  botao.textContent = 'Salvar premissas';
+  botao.textContent = 'Salvar';
   if (error){
     mostrarToast(error.message || 'Não foi possível salvar as premissas.', 'erro');
     return;
@@ -422,17 +403,23 @@ function recalcularEExibirPrecificacao(){
   const custoEmb = custoEmbalagemPorProdutoDe(PRECIF.linhasEmbalagem, PRECIF.embalagens);
   PRECIF.calculo = calcularPrecificacao(PRECIF.dados, PRECIF.config, custoEmb);
   atualizarDicasPremissas();
-  document.getElementById('precifResultados').innerHTML = montarResultadosPrecificacao(PRECIF.calculo);
+  const r = montarResultadosPrecificacao(PRECIF.calculo);
+  document.getElementById('precifResumo').innerHTML = r.resumo;
+  document.getElementById('precifTabela').innerHTML = r.tabela;
+  document.getElementById('precifDetalhe').innerHTML = r.detalhe;
+  document.getElementById('precifLegenda').innerHTML = r.legenda;
 }
 
 function atualizarDicasPremissas(){
   const k = PRECIF.calculo;
   const definir = (id, texto) => { const el = document.getElementById(id); if (el) el.textContent = texto; };
-  definir('pcTaxaDica', k.taxaHistoricaPct !== null ? `Histórico: ${pctPrecif(k.taxaHistoricaPct)} (taxa real sobre itens + frete).` : 'Sem vendas na janela: usando 0% até informar.');
+  definir('pcTaxaDica', k.taxaHistoricaPct !== null ? `Histórico: ${pctPrecif(k.taxaHistoricaPct)} sobre itens + frete.` : 'Sem vendas na janela: 0% até informar.');
   definir('pcVolumeDica', `Histórico: ${numPrecif(k.volumeAuto)} un./mês.`);
-  definir('pcFixProdDica', `Lançado no caixa: ${moedaPrecif(k.fixosAuto.producao)}/mês (+ pró-labore).`);
-  definir('pcFixVendDica', `Lançado no caixa: ${moedaPrecif(k.fixosAuto.vendas)}/mês.`);
-  definir('pcFixAdmDica', `Lançado no caixa: ${moedaPrecif(k.fixosAuto.administracao)}/mês. Inclui o DAS do MEI (fixo).`);
+  definir('pcFixProdDica', `Caixa: ${moedaPrecif(k.fixosAuto.producao)}/mês (+ pró-labore).`);
+  definir('pcFixVendDica', `Caixa: ${moedaPrecif(k.fixosAuto.vendas)}/mês.`);
+  definir('pcFixAdmDica', `Caixa: ${moedaPrecif(k.fixosAuto.administracao)}/mês.`);
+  definir('precifRodapeFixos', moedaPrecif(k.fixosTotal));
+  definir('precifRodapeRateio', k.cifPorUnidade !== null ? `${moedaPrecif(k.cifPorUnidade + k.despesasFixasPorUnidade)} / un.` : '—');
 }
 
 function montarResultadosPrecificacao(k){
@@ -440,57 +427,62 @@ function montarResultadosPrecificacao(k){
   const periodo = `${new Date(j.inicio + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(j.fim + 'T00:00:00').toLocaleDateString('pt-BR')}`;
   const alertas = [];
 
-  if (j.base === 'mes_atual') alertas.push(['', `Ainda não há meses fechados com movimento: o histórico usa o <strong>mês atual até hoje</strong> (${periodo}). Volume e fixos são parciais — revise os campos de premissas.`]);
+  if (j.base === 'mes_atual') alertas.push(['', `Ainda não há meses fechados com movimento: o histórico usa o <strong>mês atual até hoje</strong> (${periodo}). Volume e fixos são parciais — revise as premissas.`]);
   if (k.naoClassificado.total > 0.005){
     const nomes = k.naoClassificado.itens.map(i => esc(i.nome)).join(', ');
-    alertas.push(['grave', `${moedaPrecif(k.naoClassificado.total)} em saídas manuais da janela estão <strong>fora do cálculo</strong> por falta de natureza/aplicação: ${nomes}. Classifique em Configurações → categorias financeiras (ou use as categorias certas ao lançar).`]);
+    alertas.push(['grave', `${moedaPrecif(k.naoClassificado.total)} em saídas manuais estão <strong>fora do cálculo</strong> por falta de natureza/aplicação: ${nomes}. Classifique em Configurações → categorias financeiras.`]);
   }
-  if (!k.temImpostoFixo && PRECIF.config.fixos_administracao_manual === null) alertas.push(['', 'Nenhum imposto fixo (DAS do MEI) lançado na janela: o custo fixo da estrutura está <strong>subestimado</strong>. Lance o DAS no Controle de caixa (categoria de grupo Impostos, natureza fixo) ou informe o total de administração acima.']);
+  if (!k.temImpostoFixo && PRECIF.config.fixos_administracao_manual === null) alertas.push(['', 'Nenhum imposto fixo (DAS do MEI) lançado na janela: a estrutura está <strong>subestimada</strong>. Lance o DAS no Controle de caixa (categoria de Impostos, natureza fixo) ou informe a administração nas premissas.']);
   if (k.proLabore <= 0) alertas.push(['', 'Pró-labore em R$ 0: os preços não remuneram o seu trabalho — só cobrem custos e lucro.']);
-  if (!(k.volume > 0)) alertas.push(['grave', 'Sem volume mensal (não há vendas na janela e nada informado): custo de absorção e pleno não podem ser calculados. Informe o volume esperado nas premissas.']);
+  if (!(k.volume > 0)) alertas.push(['grave', 'Sem volume mensal (não há vendas na janela e nada informado): custo de absorção e pleno não podem ser calculados. Informe o volume esperado.']);
   if (!k.divisorPisoValido) alertas.push(['grave', `Taxa + despesas variáveis somam ${pctPrecif(k.pctVariaveis)} do preço: não há como calcular preços. Revise a taxa.`]);
   else if (!k.divisorAlvoValido) alertas.push(['grave', `Taxa + despesas variáveis + lucro desejado somam ${pctPrecif(k.pctVariaveis + k.lucroPct)} do preço: o preço-alvo é impossível. Reduza o lucro desejado.`]);
   const semComposicao = k.produtos.filter(p => !p.temComposicao);
-  if (semComposicao.length) alertas.push(['', `${semComposicao.length} produto(s) sem composição cadastrada (custo de insumos = R$ 0, preço calculado fica irreal): ${semComposicao.map(p => esc(p.nome)).join(', ')}.`]);
-  if (k.faturamentoAnualProjetado !== null && PRECIF.config.limite_faturamento_anual > 0 && k.faturamentoAnualProjetado > PRECIF.config.limite_faturamento_anual){
-    alertas.push(['grave', `Faturamento anual projetado (${moedaPrecif(k.faturamentoAnualProjetado)}) passa do limite do MEI informado (${moedaPrecif(PRECIF.config.limite_faturamento_anual)}). Aumentar volume ou preço pode exigir migrar de regime.`]);
+  if (semComposicao.length) alertas.push(['', `${semComposicao.length} produto(s) sem composição (custo de insumos = R$ 0, preço calculado fica irreal): ${semComposicao.map(p => esc(p.nome)).join(', ')}.`]);
+  const limite = Number(PRECIF.config.limite_faturamento_anual) || 0;
+  if (k.faturamentoAnualProjetado !== null && limite > 0 && k.faturamentoAnualProjetado > limite){
+    alertas.push(['grave', `Faturamento anual projetado (${moedaPrecif(k.faturamentoAnualProjetado)}) passa do limite do MEI (${moedaPrecif(limite)}). Aumentar volume ou preço pode exigir migrar de regime.`]);
   }
 
-  const cartao = (titulo, valor, sub, cor) => `
-    <div class="cartao-item">
-      <div class="titulo-item"><span>${titulo}</span></div>
-      <div class="linha-info" style="font-size:1.25rem; font-weight:700;"><span></span><span${cor ? ` style="color:${cor};"` : ''}>${valor}</span></div>
-      <div class="item-sub" style="white-space:normal;">${sub}</div>
+  const barra = (pct, cor) => `<div class="barra-progresso-container"><div class="barra-progresso-fill" style="width:${Math.max(0, Math.min(pct, 100))}%; background:${cor};"></div></div>`;
+  const kpi = (titulo, valor, sub, extra, cor, larga) => `
+    <div class="cartao-item kpi"${larga ? ' style="grid-column:1 / -1;"' : ''}>
+      <div class="kpi-titulo">${titulo}</div>
+      <div class="kpi-valor"${cor ? ` style="color:${cor};"` : ''}>${valor}</div>
+      ${extra || ''}
+      <div class="item-sub">${sub}</div>
     </div>`;
 
   const acimaDoPE = k.pontoEquilibrioUnidades !== null ? k.volume >= k.pontoEquilibrioUnidades : null;
-  const percentualLimite = (k.faturamentoAnualProjetado !== null && PRECIF.config.limite_faturamento_anual > 0) ? k.faturamentoAnualProjetado / PRECIF.config.limite_faturamento_anual * 100 : null;
+  const pctPE = (k.pontoEquilibrioUnidades !== null && k.volume > 0) ? k.pontoEquilibrioUnidades / k.volume * 100 : null;
+  const pctLimite = (k.faturamentoAnualProjetado !== null && limite > 0) ? k.faturamentoAnualProjetado / limite * 100 : null;
 
-  const resumo = `
-    <div class="precif-grade larga">
-      ${cartao('Custos fixos por mês', moedaPrecif(k.fixosTotal),
-        `Produção ${moedaPrecif(k.fixoProducao)} · Vendas ${moedaPrecif(k.fixoVendas)} · Administração ${moedaPrecif(k.fixoAdministracao)} (inclui pró-labore ${moedaPrecif(k.proLabore)}).`)}
-      ${cartao('Variáveis sobre o preço', pctPrecif(k.pctVariaveis),
-        `Taxa de maquininha ${pctPrecif(k.taxaPct)} + outras despesas variáveis de venda ${pctPrecif(k.pctVarVendas)}. Entram no divisor do preço, não como R$.`)}
-      ${cartao('Rateio por unidade', k.cifPorUnidade !== null ? moedaPrecif(k.cifPorUnidade + k.despesasFixasPorUnidade) : '—',
+  const cards = `
+    <div class="kpi-grid">
+      ${kpi('Custos fixos por mês', moedaPrecif(k.fixosTotal),
+        `Produção ${moedaPrecif(k.fixoProducao)} · Vendas ${moedaPrecif(k.fixoVendas)} · Administração ${moedaPrecif(k.fixoAdministracao)} (inclui pró-labore de ${moedaPrecif(k.proLabore)}).`)}
+      ${kpi('Variáveis sobre o preço', pctPrecif(k.pctVariaveis),
+        `Maquininha ${pctPrecif(k.taxaPct)} + outras despesas de venda ${pctPrecif(k.pctVarVendas)}. Entram no divisor do preço.`)}
+      ${kpi('Rateio por unidade', k.cifPorUnidade !== null ? moedaPrecif(k.cifPorUnidade + k.despesasFixasPorUnidade) : '—',
         k.cifPorUnidade !== null ? `Sobre ${numPrecif(k.volume)} un./mês: produção ${moedaPrecif(k.cifPorUnidade)} + estrutura ${moedaPrecif(k.despesasFixasPorUnidade)}.` : 'Informe o volume mensal.')}
-      ${cartao('Ponto de equilíbrio', k.pontoEquilibrioUnidades !== null ? `${numPrecif(k.pontoEquilibrioUnidades)} un./mês` : '—',
+      ${kpi('Ponto de equilíbrio', k.pontoEquilibrioUnidades !== null ? `${numPrecif(k.pontoEquilibrioUnidades)} un./mês` : '—',
         k.pontoEquilibrioUnidades !== null
-          ? `≈ ${moedaPrecif(k.pontoEquilibrioReais)} de vendas/mês, com os preços atuais e o mix vendido. Volume-base: ${numPrecif(k.volume)} un. (${acimaDoPE ? 'acima' : 'ABAIXO'} do equilíbrio).`
-          : 'Precisa de margem de contribuição positiva nos preços atuais.', acimaDoPE === false ? 'var(--vermelho)' : '')}
-      ${cartao('Faturamento anual projetado', k.faturamentoAnualProjetado !== null ? moedaPrecif(k.faturamentoAnualProjetado) : '—',
-        percentualLimite !== null ? `${pctPrecif(percentualLimite)} do limite MEI informado (volume-base × preço médio atual + frete).` : 'Sem projeção.',
-        percentualLimite !== null && percentualLimite > 100 ? 'var(--vermelho)' : '')}
+          ? `≈ ${moedaPrecif(k.pontoEquilibrioReais)} de vendas/mês nos preços atuais. Volume-base: ${numPrecif(k.volume)} un. (${acimaDoPE ? 'acima' : 'ABAIXO'} do equilíbrio).`
+          : 'Precisa de margem de contribuição positiva nos preços atuais.',
+        pctPE !== null ? barra(pctPE, acimaDoPE ? 'var(--verde)' : 'var(--vermelho)') : '', acimaDoPE === false ? 'var(--vermelho)' : '')}
+      ${kpi('Faturamento anual projetado', k.faturamentoAnualProjetado !== null ? moedaPrecif(k.faturamentoAnualProjetado) : '—',
+        pctLimite !== null ? `${pctPrecif(pctLimite)} do limite do MEI (${moedaPrecif(limite)}). Volume-base × preço médio atual + frete.` : 'Sem projeção.',
+        pctLimite !== null ? barra(pctLimite, pctLimite > 100 ? 'var(--vermelho)' : pctLimite > 80 ? '#c98a1a' : 'var(--verde)') : '',
+        pctLimite !== null && pctLimite > 100 ? 'var(--vermelho)' : '', true)}
     </div>
-    <div class="item-sub" style="white-space:normal;">Histórico: ${periodo} (${k.meses} mês(es) com movimento${j.base === 'mes_atual' ? ', mês atual parcial' : ''}) — ${numPrecif(k.unidadesJanela)} un. vendidas.</div>
-  `;
+    <p class="dash-nota" style="margin-top:12px;">Histórico: ${periodo} (${k.meses} mês(es) com movimento${j.base === 'mes_atual' ? ', mês atual parcial' : ''}) — ${numPrecif(k.unidadesJanela)} un. vendidas.</p>`;
 
-  const alertasHtml = alertas.map(([tipo, texto]) => `<div class="precif-alerta ${tipo}">${texto}</div>`).join('');
+  const resumo = alertas.map(([tipo, texto]) => `<div class="precif-alerta ${tipo}">${texto}</div>`).join('') + cards;
 
   const linhas = k.produtos.map(p => {
     const mercado = PRECIF.mercado[p.id];
     const aberto = PRECIF.aberto === p.id;
-    const linhaPrincipal = `
+    return `
       <tr>
         <td class="celula-principal">${esc(p.nome)}${p.sku ? `<small>${esc(p.sku)}</small>` : ''}</td>
         <td>${moedaPrecif(p.custoVariavel)}<small>insumos ${moedaPrecif(p.custoInsumos)} · emb. ${moedaPrecif(p.custoEmbalagem)}</small></td>
@@ -500,39 +492,43 @@ function montarResultadosPrecificacao(k){
         <td>${moedaPrecif(p.custoPleno)}</td>
         <td class="num-forte">${moedaPrecif(p.precoAlvo)}</td>
         <td class="num-forte">${moedaPrecif(p.precoAtual)}<small>MC ${pctPrecif(p.atual.margemContribuicaoPct)} · líq. ${pctPrecif(p.atual.lucroUnitarioPct)}</small></td>
-        <td><input type="number" min="0" step="any" style="width:90px; padding:5px 6px; border:1px solid #d8cfc4; border-radius:6px; font:inherit;" data-mercado="${p.id}" value="${mercado === null || mercado === undefined ? '' : mercado}" placeholder="—">
+        <td><input type="number" min="0" step="any" data-mercado="${p.id}" value="${mercado === null || mercado === undefined ? '' : mercado}" placeholder="—" aria-label="Preço de mercado de ${esc(p.nome)}">
           ${mercado && p.precoAlvo ? `<small>${mercado >= p.precoAlvo ? 'mercado cobre o alvo' : 'alvo ' + pctPrecif((p.precoAlvo / mercado - 1) * 100) + ' acima'}</small>` : ''}</td>
-        <td style="text-align:left;"><span class="selo ${p.situacao}">${ROTULO_SITUACAO[p.situacao]}</span></td>
+        <td class="alinha-esq"><span class="selo ${p.situacao}">${ROTULO_SITUACAO[p.situacao]}</span></td>
         <td><button type="button" class="btn-acao" data-acao-precif="detalhar" data-produto="${p.id}">${aberto ? 'Fechar' : 'Detalhar'}</button></td>
       </tr>`;
-    return linhaPrincipal + (aberto ? montarDetalheProdutoPrecificacao(p, k) : '');
   }).join('');
 
   const tabela = k.produtos.length === 0
     ? '<div class="lista-vazia">Nenhum produto ativo cadastrado.</div>'
     : `
-    <div class="precif-tabela-wrap">
-      <table class="precif-tabela">
-        <thead>
-          <tr class="grupos">
-            <th></th><th>Variável</th><th>↳ piso</th><th colspan="2">Absorção</th><th colspan="2">Pleno</th><th colspan="2">Hoje</th><th></th><th></th>
-          </tr>
-          <tr>
-            <th>Produto</th><th>Custo variável</th><th>Preço mínimo</th><th>Custo de produção</th><th>Preço que cobre a produção</th><th>Custo pleno</th><th>Preço-alvo</th><th>Preço atual</th><th>Referência de mercado</th><th style="text-align:left;">Situação</th><th></th>
-          </tr>
-        </thead>
-        <tbody>${linhas}</tbody>
-      </table>
-    </div>
-    <div class="legenda">
+    <div class="cartao-item relatorio-produtos">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-produtos precif-tabela">
+          <thead>
+            <tr class="grupos">
+              <th></th><th colspan="2">Custeio variável</th><th colspan="2">Custeio por absorção</th><th colspan="2">Custeio pleno</th><th colspan="2">Hoje</th><th colspan="2"></th>
+            </tr>
+            <tr>
+              <th>Produto</th><th>Custo</th><th>Preço mínimo</th><th>Custo</th><th>Preço (cobre produção)</th><th>Custo</th><th>Preço-alvo</th><th>Preço atual</th><th>Mercado</th><th class="alinha-esq">Situação</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  const legenda = k.produtos.length === 0 ? '' : `
+    <p class="dash-nota" style="margin-top:14px; line-height:1.6;">
       <strong>Como ler.</strong> <em>Preço mínimo</em> (custeio variável): abaixo dele cada venda piora o caixa — serve para promoção ou encomenda extra, nunca para tabela.
       <em>Preço que cobre a produção</em> (absorção): custo variável + fixos de produção (gás, energia, parte do pró-labore) rateados por unidade.
       <em>Preço-alvo</em> (pleno): tudo isso + despesas fixas de venda e administração (inclui o DAS) + lucro desejado.
       <em>MC</em> = margem de contribuição (preço − taxa − custo variável); <em>líq.</em> = o que sobra depois de pagar também a estrutura rateada.
-      O rateio é por unidade e depende do volume-base: se o volume cair, o fixo por unidade sobe e o preço calculado sobe junto — compare sempre com a referência de mercado.
-    </div>`;
+      O rateio é por unidade e depende do volume-base: se o volume cair, o fixo por unidade sobe e o preço calculado sobe junto — compare sempre com o preço de mercado.
+    </p>`;
 
-  return alertasHtml + resumo + tabela;
+  const produtoAberto = k.produtos.find(p => p.id === PRECIF.aberto);
+  return { resumo, tabela, legenda, detalhe: produtoAberto ? montarDetalheProdutoPrecificacao(produtoAberto, k) : '' };
 }
 
 function montarDetalheProdutoPrecificacao(p, k){
@@ -541,11 +537,11 @@ function montarDetalheProdutoPrecificacao(p, k){
     `<option value="${e.id}"${e.id === selecionada ? ' selected' : ''}>${esc(e.nome)} — ${moedaPrecifFina(Number(e.custo_unitario))}</option>`).join('');
 
   const editor = linhas.map((l, i) => `
-    <div class="linha-emb">
-      <select data-emb-campo="embalagem_id" data-produto="${p.id}" data-indice="${i}">${opcoes(l.embalagem_id)}</select>
-      <input type="number" min="0" step="any" data-emb-campo="quantidade" data-produto="${p.id}" data-indice="${i}" value="${l.quantidade}" title="Quantidade da embalagem">
-      <input type="number" min="1" step="any" data-emb-campo="por_unidades" data-produto="${p.id}" data-indice="${i}" value="${l.por_unidades}" title="A cada quantas unidades do produto">
-      <button type="button" class="btn-acao excluir" data-acao-precif="remover-emb" data-produto="${p.id}" data-indice="${i}" style="padding:2px 8px;">×</button>
+    <div class="compra-linha-item">
+      <select data-emb-campo="embalagem_id" data-produto="${p.id}" data-indice="${i}" aria-label="Embalagem">${opcoes(l.embalagem_id)}</select>
+      <input type="number" min="0" step="any" data-emb-campo="quantidade" data-produto="${p.id}" data-indice="${i}" value="${l.quantidade}" title="Quantidade da embalagem" aria-label="Quantidade">
+      <input type="number" min="1" step="any" data-emb-campo="por_unidades" data-produto="${p.id}" data-indice="${i}" value="${l.por_unidades}" title="A cada quantas unidades do produto" aria-label="A cada quantas unidades">
+      <button type="button" class="remover-item-compra" data-acao-precif="remover-emb" data-produto="${p.id}" data-indice="${i}" aria-label="Remover embalagem">×</button>
     </div>`).join('');
 
   const simulado = PRECIF.simulado[p.id];
@@ -556,10 +552,11 @@ function montarDetalheProdutoPrecificacao(p, k){
   const quebra = (rotulo, valor, total) => `<div class="quebra${total ? ' total' : ''}"><span>${rotulo}</span><span>${valor}</span></div>`;
 
   return `
-    <tr class="detalhe"><td colspan="11">
+    <div class="cartao-item" style="margin-top:18px;">
+      <div class="titulo-item"><span>Detalhe — ${esc(p.nome)}</span><button type="button" class="btn-acao" style="flex:none; padding:6px 16px;" data-acao-precif="detalhar" data-produto="${p.id}">Fechar</button></div>
       <div class="detalhe-grid">
         <div>
-          <h4>De onde vem o custo (1 unidade)</h4>
+          <div class="compra-secao-titulo">De onde vem o custo (1 unidade)</div>
           ${quebra('Insumos (custo atual da composição)', moedaPrecifFina(p.custoInsumos))}
           ${quebra('Embalagens', moedaPrecifFina(p.custoEmbalagem))}
           ${quebra('Variável de produção lançado no caixa', moedaPrecifFina(p.varProducaoPorUnidade))}
@@ -571,28 +568,26 @@ function montarDetalheProdutoPrecificacao(p, k){
           ${quebra(`Divisor: 1 − ${pctPrecif(k.pctVariaveis)} variáveis − ${pctPrecif(k.lucroPct)} lucro`, (k.divisorAlvoValido ? (1 - k.pctVariaveis / 100 - k.lucroPct / 100) : 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 }))}
         </div>
         <div>
-          <h4>Embalagens deste produto</h4>
-          <div class="item-sub" style="white-space:normal; margin-bottom:6px;">Escolha a embalagem, a quantidade e <em>a cada quantas unidades</em> ela é usada (ex.: 1 caixa a cada 6 brigadeiros).</div>
-          ${linhas.length ? '<div class="linha-emb" style="font-size:.72rem; opacity:.7;"><span>Embalagem</span><span>Qtd.</span><span>A cada (un.)</span><span></span></div>' : ''}
-          ${editor || '<div class="item-sub">Nenhuma embalagem — custo de embalagem R$ 0.</div>'}
-          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-            <button type="button" class="btn-acao" data-acao-precif="add-emb" data-produto="${p.id}">+ Embalagem</button>
-            <button type="button" class="btn-acao" data-acao-precif="salvar-emb" data-produto="${p.id}">Salvar embalagens</button>
+          <div class="compra-secao-titulo">Embalagens deste produto</div>
+          <div class="item-sub" style="margin:-4px 0 10px;">Escolha a embalagem, a quantidade e <em>a cada quantas unidades</em> ela é usada (ex.: 1 caixa a cada 6 brigadeiros).</div>
+          ${linhas.length ? '<div class="cabecalho-emb"><span>Embalagem</span><span>Qtd.</span><span>A cada</span><span></span></div>' : ''}
+          ${editor || '<div class="item-sub" style="margin-bottom:8px;">Nenhuma embalagem — custo de embalagem R$ 0.</div>'}
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn-secundario btn-add-item" data-acao-precif="add-emb" data-produto="${p.id}">+ Embalagem</button>
+            <button type="button" class="btn-secundario btn-add-item" data-acao-precif="salvar-emb" data-produto="${p.id}">Salvar embalagens</button>
           </div>
         </div>
         <div>
-          <h4>Simular um preço</h4>
-          <div class="precif-campo"><label>Preço de venda (R$)</label>
-            <input type="number" min="0" step="any" data-simular="${p.id}" value="${precoSim !== null ? precoSim : ''}" placeholder="${p.precoAtual ? p.precoAtual : 'ex.: 12'}"></div>
+          <div class="compra-secao-titulo">Simular um preço</div>
+          <div class="form-grupo"><label for="precifSimular">Preço de venda (R$)</label>
+            <input type="number" id="precifSimular" min="0" step="any" data-simular="${p.id}" value="${precoSim !== null ? precoSim : ''}" placeholder="${p.precoAtual ? p.precoAtual : 'ex.: 12'}"></div>
           ${sim ? `
-            <div style="margin-top:8px;">
-              ${quebra('Margem de contribuição', `${moedaPrecif(sim.margemContribuicao)} (${pctPrecif(sim.margemContribuicaoPct)})`)}
-              ${quebra('Lucro depois da estrutura, por unidade', `${moedaPrecif(sim.lucroUnitario)} (${pctPrecif(sim.lucroUnitarioPct)})`)}
-              ${quebra('No volume vendido deste produto, por mês', moedaPrecif(lucroMensalSim), true)}
-            </div>` : '<div class="item-sub" style="margin-top:8px;">Digite um preço para ver margem e lucro.</div>'}
+            ${quebra('Margem de contribuição', `${moedaPrecif(sim.margemContribuicao)} (${pctPrecif(sim.margemContribuicaoPct)})`)}
+            ${quebra('Lucro depois da estrutura, por unidade', `${moedaPrecif(sim.lucroUnitario)} (${pctPrecif(sim.lucroUnitarioPct)})`)}
+            ${quebra('No volume vendido deste produto, por mês', moedaPrecif(lucroMensalSim), true)}` : '<div class="item-sub">Digite um preço para ver margem e lucro.</div>'}
         </div>
       </div>
-    </td></tr>`;
+    </div>`;
 }
 
 // --------------------------------------------------------
@@ -641,11 +636,14 @@ async function aoClicarPrecificacao(evento){
   const acao = botao.dataset.acaoPrecif;
   const produtoId = botao.dataset.produto;
 
-  if (acao === 'salvar-premissas'){
+  if (acao === 'restaurar-premissas'){
+    await carregarPrecificacao();
+  } else if (acao === 'salvar-premissas'){
     await salvarPremissasPrecificacao();
   } else if (acao === 'detalhar'){
     PRECIF.aberto = PRECIF.aberto === produtoId ? null : produtoId;
     recalcularEExibirPrecificacao();
+    if (PRECIF.aberto) document.getElementById('precifDetalhe').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } else if (acao === 'add-emb'){
     (PRECIF.linhasEmbalagem[produtoId] = PRECIF.linhasEmbalagem[produtoId] || []).push({ embalagem_id: '', quantidade: 1, por_unidades: 1 });
     recalcularEExibirPrecificacao();

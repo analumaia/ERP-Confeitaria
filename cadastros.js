@@ -54,8 +54,17 @@ function formatarValor(registro, infoCampo){
 // --------------------------------------------------------
 async function carregarModulo(chave){
   const config = MODULOS[chave];
-  const container = document.querySelector(`[data-lista="${chave}"]`);
-  container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  // visualização em tabela usa o <tbody data-tabela-corpo>; em cartões, o container data-lista
+  const emTabela = config.visualizacao === 'tabela';
+  const container = emTabela
+    ? document.querySelector(`[data-tabela-corpo="${chave}"]`)
+    : document.querySelector(`[data-lista="${chave}"]`);
+  const colunas = 2 + config.infoCampos.length + (config.temAtivo ? 1 : 0);
+  const mensagem = texto => container && (container.innerHTML = emTabela
+    ? `<tr><td colspan="${colunas}" class="lista-vazia">${texto}</td></tr>`
+    : `<div class="lista-vazia">${texto}</div>`);
+
+  mensagem('Carregando...');
 
   const { data, error } = await supabaseClient
     .from(config.tabela)
@@ -63,7 +72,7 @@ async function carregarModulo(chave){
     .order(config.tituloCampo, { ascending: true });
 
   if (error){
-    container.innerHTML = '<div class="lista-vazia">Não foi possível carregar. Verifique sua conexão.</div>';
+    mensagem('Não foi possível carregar. Verifique sua conexão.');
     mostrarToast('Erro ao carregar ' + NOMES_MODULO[chave] + '.', 'erro');
     return;
   }
@@ -133,6 +142,7 @@ function renderizarLista(chave){
 // layout desenhado.
 function renderizarTabelaGenerica(chave, config, registros){
   const corpo = document.querySelector(`[data-tabela-corpo="${chave}"]`);
+  if (!corpo) return;
   const colunas = 2 + config.infoCampos.length + (config.temAtivo ? 1 : 0);
 
   if (registros.length === 0){

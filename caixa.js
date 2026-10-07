@@ -164,7 +164,7 @@ async function carregarCaixa(){
   const containerResumo = document.getElementById('resumoCaixa');
   const corpo = document.getElementById('corpoTabelaCaixa');
   containerResumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
-  corpo.innerHTML = '<tr><td colspan="5" class="lista-vazia">Carregando...</td></tr>';
+  corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Carregando...</td></tr>';
 
   const [respLancamentos, respCategorias, respPedidos] = await Promise.all([
     supabaseClient
@@ -180,12 +180,13 @@ async function carregarCaixa(){
 
   if (respLancamentos.error || respPedidos.error){
     containerResumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o controle de caixa.</div>';
-    corpo.innerHTML = '<tr><td colspan="5" class="lista-vazia">Não foi possível carregar os lançamentos. Se ainda não rodou, execute o SQL <strong>migracao-categorias-financeiras.sql</strong> no Supabase.</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Não foi possível carregar os lançamentos. Se ainda não rodou, execute o SQL <strong>migracao-categorias-financeiras.sql</strong> no Supabase.</td></tr>';
     mostrarToast('Erro ao carregar o controle de caixa.', 'erro');
     return;
   }
 
   const data = respLancamentos.data;
+  dadosCarregados.lancamentosCaixa = data;
   categoriasFinanceirasAtivas = respCategorias.data || [];
 
   const totalEntradas = data.filter(l => l.tipo === 'entrada').reduce((s, l) => s + Number(l.valor), 0);
@@ -215,7 +216,7 @@ async function carregarCaixa(){
   renderizarResumosPorGrupo(data);
 
   if (data.length === 0){
-    corpo.innerHTML = '<tr><td colspan="5" class="lista-vazia">Nenhum lançamento neste período.</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Nenhum lançamento neste período.</td></tr>';
     return;
   }
 
@@ -223,16 +224,22 @@ async function carregarCaixa(){
     const dataFormatada = new Date(l.data + 'T00:00:00').toLocaleDateString('pt-BR');
     const ehEntrada = l.tipo === 'entrada';
     const nomeCategoria = l.categorias_financeiras ? l.categorias_financeiras.nome : (l.categoria ? capitalizar(l.categoria) : 'Sem categoria');
+    const semCategoria = !l.categorias_financeiras;
     return `
       <tr>
         <td>${dataFormatada}</td>
-        <td class="celula-principal">${esc(nomeCategoria)}</td>
+        <td class="celula-principal"${semCategoria ? ' style="color:var(--vermelho);"' : ''}>${semCategoria ? '⚠ ' : ''}${esc(nomeCategoria)}</td>
         <td>${capitalizar(l.origem)}</td>
         <td>${esc(l.observacao) || '—'}</td>
         <td style="color:${ehEntrada ? 'var(--verde)' : 'var(--vermelho)'}; font-weight:700; white-space:nowrap;">${ehEntrada ? '+ ' : '− '}${formatarMoeda(Number(l.valor))}</td>
+        <td><button type="button" class="btn-acao" data-alterar-categoria-lancamento="${l.id}">Alterar categoria</button></td>
       </tr>
     `;
   }).join('');
+
+  corpo.querySelectorAll('[data-alterar-categoria-lancamento]').forEach(botao => {
+    botao.addEventListener('click', () => abrirModalAlterarCategoriaLancamento(botao.dataset.alterarCategoriaLancamento));
+  });
 }
 
 // --------------------------------------------------------
@@ -401,6 +408,95 @@ async function salvarNovoLancamento(){
   }
 
   mostrarToast('Lançamento registrado!');
+  fecharModal();
+  carregarCaixa();
+}
+
+// --------------------------------------------------------
+// Alterar SÓ a categoria de um lançamento (qualquer um, manual ou
+// automático). Valor, data, tipo e origem não são tocados. A lista
+// mostra apenas categorias do mesmo tipo (entrada/saída) do lançamento.
+// --------------------------------------------------------
+const ROTULO_NATUREZA_CURTO = { fixo: 'Fixo', variavel: 'Variável' };
+const ROTULO_APLICACAO_CURTO = { producao: 'Produção', vendas: 'Vendas', administracao: 'Administração' };
+
+function custeioCurtoCategoria(c){
+  if (c.tipo !== 'saida') return '';
+  return (c.natureza && c.aplicacao)
+    ? ` · ${ROTULO_NATUREZA_CURTO[c.natureza]} / ${ROTULO_APLICACAO_CURTO[c.aplicacao]}`
+    : ' · ⚠ sem natureza/aplicação';
+}
+
+function abrirModalAlterarCategoriaLancamento(id){
+  const l = (dadosCarregados.lancamentosCaixa || []).find(x => String(x.id) === String(id));
+  if (!l) return;
+  const atual = l.categorias_financeiras ? l.categorias_financeiras.nome : (l.categoria ? capitalizar(l.categoria) : 'Sem categoria');
+  const automatico = ehLancamentoAutomatico(l);
+  const opcoes = categoriasFinanceirasAtivas.filter(c => c.tipo === l.tipo);
+
+  modoModal = { modo: 'categoria_lancamento', id: l.id };
+  modalTitulo.textContent = 'Alterar categoria do lançamento';
+  modalCampos.innerHTML = `
+    <div class="cartao-item" style="background:var(--bege-claro); box-shadow:none; margin-bottom:14px;">
+      <div class="linha-info"><span>Data</span><span>${new Date(l.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span></div>
+      <div class="linha-info"><span>Valor</span><span>${l.tipo === 'entrada' ? '+ ' : '− '}${Number(l.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+      <div class="linha-info"><span>Observação</span><span>${esc(l.observacao) || '—'}</span></div>
+      <div class="linha-info"><span>Categoria atual</span><span>${esc(atual)}</span></div>
+    </div>
+    <div class="form-grupo">
+      <label for="campoNovaCategoriaLancamento">Nova categoria</label>
+      <select id="campoNovaCategoriaLancamento">
+        <option value="">— Sem categoria —</option>
+        ${opcoes.map(c => `<option value="${c.id}"${String(c.id) === String(l.categoria_id) ? ' selected' : ''}>${esc(c.nome)} (${rotuloGrupoDre(c.grupo_dre)})${custeioCurtoCategoria(c)}</option>`).join('')}
+      </select>
+      <div class="item-sub" id="avisoNovaCategoriaLancamento" style="margin-top:6px;"></div>
+    </div>
+    ${automatico ? '<div class="item-sub" style="white-space:normal;">Lançamento automático: a DRE e a Precificação já tratam vendas, compras e taxas pelos próprios pedidos e compras, então trocar a categoria aqui só muda o Resumo por grupo do caixa.</div>' : ''}
+  `;
+
+  const select = document.getElementById('campoNovaCategoriaLancamento');
+  const aviso = document.getElementById('avisoNovaCategoriaLancamento');
+  const atualizarAviso = () => {
+    const c = categoriasFinanceirasAtivas.find(x => String(x.id) === select.value);
+    if (!select.value){
+      aviso.textContent = 'Sem categoria: o lançamento fica fora da DRE e da Precificação.';
+    } else if (c && c.tipo === 'saida' && (!c.natureza || !c.aplicacao)){
+      aviso.textContent = 'Esta categoria ainda não tem natureza/aplicação: a Precificação vai ignorar este lançamento. Ajuste em Configurações → Categorias financeiras.';
+    } else {
+      aviso.textContent = '';
+    }
+  };
+  select.addEventListener('change', atualizarAviso);
+  atualizarAviso();
+  modalOverlay.classList.add('aberto');
+}
+
+async function salvarCategoriaLancamento(){
+  const id = modoModal.id;
+  const l = (dadosCarregados.lancamentosCaixa || []).find(x => String(x.id) === String(id));
+  const novaId = document.getElementById('campoNovaCategoriaLancamento').value || null;
+  const nova = categoriasFinanceirasAtivas.find(c => String(c.id) === String(novaId));
+
+  // só o vínculo com a categoria muda. Nos lançamentos manuais o texto "categoria" acompanha
+  // (é assim que o lançamento manual já é gravado); nos automáticos o texto original é mantido
+  const alteracao = { categoria_id: novaId };
+  if (l && !ehLancamentoAutomatico(l)) alteracao.categoria = nova ? nova.nome.toLowerCase() : 'outro';
+
+  const btnSalvar = document.getElementById('btnSalvarModal');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  const { error } = await supabaseClient.from('lancamentos_financeiros').update(alteracao).eq('id', id);
+
+  btnSalvar.disabled = false;
+  btnSalvar.textContent = 'Salvar';
+
+  if (error){
+    mostrarToast(error.message || 'Não foi possível alterar a categoria.', 'erro');
+    return;
+  }
+
+  mostrarToast('Categoria alterada!');
   fecharModal();
   carregarCaixa();
 }

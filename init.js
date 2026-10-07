@@ -23,6 +23,11 @@ modalForm.addEventListener('submit', async (evento) => {
     return;
   }
 
+  if (modoModal.modo === 'categoria_lancamento'){
+    await salvarCategoriaLancamento();
+    return;
+  }
+
   if (modoModal.modo === 'meta'){
     await salvarNovaMeta();
     return;

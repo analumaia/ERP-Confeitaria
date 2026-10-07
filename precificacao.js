@@ -196,6 +196,8 @@ const PRECIF = {
   mercado: {},         // produto_id → preço de referência de mercado
   simulado: {},        // produto_id → preço simulado (só em memória)
   aberto: null,        // produto com o detalhe aberto
+  embAberto: null,     // produto com o editor de embalagens aberto
+  embSujo: {},         // produto_id → true quando há alteração não salva
   calculo: null,
 };
 
@@ -221,6 +223,10 @@ const CONFIG_PADRAO_PRECIFICACAO = {
         <form class="cartao-item cartao-nova-compra" id="precifPremissas" novalidate></form>
         <div id="precifResumo"></div>
       </div>
+      <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 4px;">Embalagens por produto</h3>
+      <div class="item-sub" style="white-space:normal; margin-bottom:10px;">Relacione as embalagens de cada produto (pode ser mais de uma). Elas entram no custo variável de cada unidade.</div>
+      <div id="precifEmbalagens"></div>
+
       <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Preços por produto</h3>
       <div id="precifTabela"><div class="lista-vazia">Carregando...</div></div>
       <div id="precifDetalhe"></div>
@@ -410,6 +416,8 @@ function recalcularEExibirPrecificacao(){
   PRECIF.calculo = calcularPrecificacao(PRECIF.dados, PRECIF.config, custoEmb);
   atualizarDicasPremissas();
   const r = montarResultadosPrecificacao(PRECIF.calculo);
+  const secEmb = document.getElementById('precifEmbalagens');
+  if (secEmb) secEmb.innerHTML = montarEmbalagensPorProduto(PRECIF.calculo);
   document.getElementById('precifResumo').innerHTML = r.resumo;
   document.getElementById('precifTabela').innerHTML = r.tabela;
   document.getElementById('precifDetalhe').innerHTML = r.detalhe;
@@ -541,19 +549,74 @@ function montarResultadosPrecificacao(k){
   return { resumo, tabela, legenda, detalhe: produtoAberto ? montarDetalheProdutoPrecificacao(produtoAberto, k) : '' };
 }
 
-function montarDetalheProdutoPrecificacao(p, k){
-  const linhas = PRECIF.linhasEmbalagem[p.id] || [];
+// Seção "Embalagens por produto": uma linha por produto, com resumo das embalagens e editor
+function montarEditorEmbalagens(produtoId){
+  const linhas = PRECIF.linhasEmbalagem[produtoId] || [];
   const opcoes = (selecionada) => `<option value="">Escolha a embalagem...</option>` + PRECIF.embalagens.map(e =>
     `<option value="${e.id}"${e.id === selecionada ? ' selected' : ''}>${esc(e.nome)} — ${moedaPrecifFina(Number(e.custo_unitario))}</option>`).join('');
 
   const editor = linhas.map((l, i) => `
     <div class="compra-linha-item">
-      <select data-emb-campo="embalagem_id" data-produto="${p.id}" data-indice="${i}" aria-label="Embalagem">${opcoes(l.embalagem_id)}</select>
-      <input type="number" min="0" step="any" data-emb-campo="quantidade" data-produto="${p.id}" data-indice="${i}" value="${l.quantidade}" title="Quantidade da embalagem" aria-label="Quantidade">
-      <input type="number" min="1" step="any" data-emb-campo="por_unidades" data-produto="${p.id}" data-indice="${i}" value="${l.por_unidades}" title="A cada quantas unidades do produto" aria-label="A cada quantas unidades">
-      <button type="button" class="remover-item-compra" data-acao-precif="remover-emb" data-produto="${p.id}" data-indice="${i}" aria-label="Remover embalagem">×</button>
+      <select data-emb-campo="embalagem_id" data-produto="${produtoId}" data-indice="${i}" aria-label="Embalagem">${opcoes(l.embalagem_id)}</select>
+      <input type="number" min="0" step="any" data-emb-campo="quantidade" data-produto="${produtoId}" data-indice="${i}" value="${l.quantidade}" title="Quantidade da embalagem" aria-label="Quantidade">
+      <input type="number" min="1" step="any" data-emb-campo="por_unidades" data-produto="${produtoId}" data-indice="${i}" value="${l.por_unidades}" title="A cada quantas unidades do produto" aria-label="A cada quantas unidades">
+      <button type="button" class="remover-item-compra" data-acao-precif="remover-emb" data-produto="${produtoId}" data-indice="${i}" aria-label="Remover embalagem">×</button>
     </div>`).join('');
 
+  const outros = (PRECIF.calculo ? PRECIF.calculo.produtos : []).filter(x => x.id !== produtoId && (PRECIF.linhasEmbalagem[x.id] || []).length);
+  const copiar = outros.length ? `
+    <select class="emb-copiar" data-copiar-emb="${produtoId}" aria-label="Copiar embalagens de outro produto">
+      <option value="">Copiar de outro produto...</option>
+      ${outros.map(x => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}
+    </select>` : '';
+
+  return `
+    <div class="emb-editor">
+      <div class="item-sub" style="white-space:normal; margin-bottom:10px;">Escolha a embalagem, a quantidade e <em>a cada quantas unidades</em> ela é usada (ex.: 1 caixa a cada 6 brigadeiros; 1 etiqueta a cada 1 unidade).</div>
+      ${linhas.length ? '<div class="cabecalho-emb"><span>Embalagem</span><span>Qtd.</span><span>A cada</span><span></span></div>' : ''}
+      ${editor || '<div class="item-sub" style="margin-bottom:8px;">Nenhuma embalagem — custo de embalagem R$ 0.</div>'}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button type="button" class="btn-secundario btn-add-item" data-acao-precif="add-emb" data-produto="${produtoId}">+ Embalagem</button>
+        <button type="button" class="btn-secundario btn-add-item" data-acao-precif="salvar-emb" data-produto="${produtoId}">Salvar embalagens</button>
+        ${copiar}
+      </div>
+    </div>`;
+}
+
+function montarEmbalagensPorProduto(k){
+  if (!k.produtos.length) return '<div class="lista-vazia">Nenhum produto ativo.</div>';
+  if (!PRECIF.embalagens.length){
+    return '<div class="precif-alerta">Nenhuma embalagem cadastrada. Cadastre em Estoque → Embalagens para relacioná-las aos produtos.</div>';
+  }
+  const fmtQtd = n => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+  const semEmb = k.produtos.filter(p => !(PRECIF.linhasEmbalagem[p.id] || []).some(l => l.embalagem_id)).length;
+
+  const linhasHtml = k.produtos.map(p => {
+    const linhas = (PRECIF.linhasEmbalagem[p.id] || []).filter(l => l.embalagem_id);
+    const aberto = PRECIF.embAberto === p.id;
+    const chips = linhas.map(l => {
+      const e = PRECIF.embalagens.find(x => x.id === l.embalagem_id);
+      const por = Number(l.por_unidades) || 1;
+      return `<span class="emb-chip">${esc(e ? e.nome : 'Embalagem removida')} · ${fmtQtd(l.quantidade)} a cada ${fmtQtd(por)} un.</span>`;
+    }).join('') || '<span class="item-sub">Sem embalagem relacionada</span>';
+    const sujo = PRECIF.embSujo[p.id] ? '<span class="emb-chip emb-sujo">não salvo</span>' : '';
+    return `
+      <div class="cartao-item emb-produto">
+        <div class="titulo-item">
+          <span>${esc(p.nome)} ${sujo}</span>
+          <button type="button" class="btn-acao" style="flex:none; padding:6px 16px;" data-acao-precif="editar-emb" data-produto="${p.id}">${aberto ? 'Fechar' : 'Editar embalagens'}</button>
+        </div>
+        <div class="emb-resumo">${chips}</div>
+        <div class="linha-info"><span>Custo de embalagem por unidade</span><span>${moedaPrecifFina(p.custoEmbalagem)}</span></div>
+        ${aberto ? montarEditorEmbalagens(p.id) : ''}
+      </div>`;
+  }).join('');
+
+  return (semEmb ? `<div class="precif-alerta">${semEmb} produto(s) sem embalagem relacionada: o custo de embalagem deles está em R$ 0 e o preço sai subestimado.</div>` : '') +
+    `<div class="emb-lista">${linhasHtml}</div>`;
+}
+
+function montarDetalheProdutoPrecificacao(p, k){
   const simulado = PRECIF.simulado[p.id];
   const precoSim = simulado !== undefined && simulado !== null && simulado > 0 ? simulado : null;
   const sim = precoSim !== null ? p.avaliar(precoSim) : null;
@@ -579,13 +642,8 @@ function montarDetalheProdutoPrecificacao(p, k){
         </div>
         <div>
           <div class="compra-secao-titulo">Embalagens deste produto</div>
-          <div class="item-sub" style="margin:-4px 0 10px;">Escolha a embalagem, a quantidade e <em>a cada quantas unidades</em> ela é usada (ex.: 1 caixa a cada 6 brigadeiros).</div>
-          ${linhas.length ? '<div class="cabecalho-emb"><span>Embalagem</span><span>Qtd.</span><span>A cada</span><span></span></div>' : ''}
-          ${editor || '<div class="item-sub" style="margin-bottom:8px;">Nenhuma embalagem — custo de embalagem R$ 0.</div>'}
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn-secundario btn-add-item" data-acao-precif="add-emb" data-produto="${p.id}">+ Embalagem</button>
-            <button type="button" class="btn-secundario btn-add-item" data-acao-precif="salvar-emb" data-produto="${p.id}">Salvar embalagens</button>
-          </div>
+          <div class="item-sub" style="white-space:normal; margin-bottom:10px;">${(PRECIF.linhasEmbalagem[p.id] || []).filter(l => l.embalagem_id).length ? `${(PRECIF.linhasEmbalagem[p.id] || []).filter(l => l.embalagem_id).length} embalagem(ns) relacionada(s) — ${moedaPrecifFina(p.custoEmbalagem)} por unidade.` : 'Nenhuma embalagem relacionada.'}</div>
+          <button type="button" class="btn-secundario btn-add-item" data-acao-precif="editar-emb" data-produto="${p.id}" data-rolar="1">Editar na seção Embalagens por produto</button>
         </div>
         <div>
           <div class="compra-secao-titulo">Simular um preço</div>
@@ -636,6 +694,16 @@ async function aoAlterarPrecificacao(evento){
     if (!linha) return;
     if (alvo.dataset.embCampo === 'embalagem_id') linha.embalagem_id = alvo.value;
     else linha[alvo.dataset.embCampo] = Number(alvo.value) || 0;
+    PRECIF.embSujo[alvo.dataset.produto] = true;
+    recalcularEExibirPrecificacao();
+    return;
+  }
+
+  if (alvo.dataset.copiarEmb){
+    const origem = alvo.value;
+    if (!origem) return;
+    PRECIF.linhasEmbalagem[alvo.dataset.copiarEmb] = (PRECIF.linhasEmbalagem[origem] || []).map(l => ({ ...l }));
+    PRECIF.embSujo[alvo.dataset.copiarEmb] = true;
     recalcularEExibirPrecificacao();
   }
 }
@@ -654,11 +722,20 @@ async function aoClicarPrecificacao(evento){
     PRECIF.aberto = PRECIF.aberto === produtoId ? null : produtoId;
     recalcularEExibirPrecificacao();
     if (PRECIF.aberto) document.getElementById('precifDetalhe').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else if (acao === 'editar-emb'){
+    PRECIF.embAberto = (PRECIF.embAberto === produtoId && !botao.dataset.rolar) ? null : produtoId;
+    recalcularEExibirPrecificacao();
+    if (PRECIF.embAberto && botao.dataset.rolar){
+      const alvoRolagem = document.getElementById('precifEmbalagens');
+      if (alvoRolagem) alvoRolagem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   } else if (acao === 'add-emb'){
     (PRECIF.linhasEmbalagem[produtoId] = PRECIF.linhasEmbalagem[produtoId] || []).push({ embalagem_id: '', quantidade: 1, por_unidades: 1 });
+    PRECIF.embSujo[produtoId] = true;
     recalcularEExibirPrecificacao();
   } else if (acao === 'remover-emb'){
     (PRECIF.linhasEmbalagem[produtoId] || []).splice(Number(botao.dataset.indice), 1);
+    PRECIF.embSujo[produtoId] = true;
     recalcularEExibirPrecificacao();
   } else if (acao === 'salvar-emb'){
     await salvarEmbalagensDoProduto(produtoId, botao);
@@ -686,6 +763,7 @@ async function salvarEmbalagensDoProduto(produtoId, botao){
     return;
   }
   PRECIF.linhasEmbalagem[produtoId] = linhas;
+  delete PRECIF.embSujo[produtoId];
   mostrarToast('Embalagens salvas!');
   recalcularEExibirPrecificacao();
 }

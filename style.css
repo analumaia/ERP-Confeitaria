@@ -1320,6 +1320,15 @@ h1, h2, h3, .fonte-titulo{
 
 .detalhe-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 26px; margin-top: 6px; }
 .detalhe-grid .form-grupo input{ border-radius: 999px; padding: 10px 16px; }
+.emb-editor .compra-linha-item{ grid-template-columns: minmax(0, 1fr) 70px 80px 36px; gap: 6px; margin-bottom: 8px; }
+.emb-editor .compra-linha-item input{ padding: 10px 4px; text-align: center; }
+.emb-editor .compra-linha-item select{ padding: 10px 10px; }
+.emb-lista{ display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+.emb-resumo{ display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.emb-chip{ display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; background: var(--bege-escuro); color: var(--marrom-cafe); }
+.emb-chip.emb-sujo{ background: #fff3d6; color: #9a6a00; margin-left: 6px; }
+.emb-editor{ margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--bege-escuro); }
+.emb-copiar{ border-radius: 999px; padding: 8px 14px; border: 1px solid var(--bege-escuro); background: #fff; font-family: inherit; font-size: 0.8rem; color: var(--marrom-cafe); }
 .detalhe-grid .compra-linha-item{ grid-template-columns: minmax(0, 1fr) 58px 70px 36px; gap: 6px; margin-bottom: 8px; }
 .detalhe-grid .compra-linha-item input{ padding: 10px 4px; text-align: center; }
 .detalhe-grid .compra-linha-item select{ padding: 10px 10px; }

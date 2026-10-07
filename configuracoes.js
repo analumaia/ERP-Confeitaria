@@ -248,7 +248,7 @@ async function carregarCategoriasFinanceiras(){
     <tr>
       <td class="celula-principal">${esc(c.nome)}</td>
       <td>${c.tipo === 'entrada' ? 'Entrada' : 'Saída'}</td>
-      <td>${rotuloGrupoDre(c.grupo_dre)}</td>
+      <td>${rotuloGrupoDre(c.grupo_dre)}${c.tipo === 'saida' ? `<span class="item-sub">${rotuloCustoCategoria(c)}</span>` : ''}</td>
       <td><button type="button" class="btn-acao" data-editar-categoria-financeira="${c.id}">Editar</button></td>
       <td><button type="button" class="btn-acao excluir" data-excluir-categoria-financeira="${c.id}">Excluir</button></td>
     </tr>
@@ -260,6 +260,21 @@ async function carregarCategoriasFinanceiras(){
   corpo.querySelectorAll('[data-excluir-categoria-financeira]').forEach(botao => {
     botao.addEventListener('click', () => excluirCategoriaFinanceira(botao.dataset.excluirCategoriaFinanceira));
   });
+}
+
+// Natureza e aplicação servem ao custeio (página Precificação), não à DRE
+const NATUREZAS_CUSTO = [{ codigo: 'fixo', label: 'Fixo (não muda com as vendas)' }, { codigo: 'variavel', label: 'Variável (acompanha as vendas)' }];
+const APLICACOES_CUSTO = [{ codigo: 'producao', label: 'Produção (cozinha)' }, { codigo: 'vendas', label: 'Vendas / entrega' }, { codigo: 'administracao', label: 'Administração' }];
+
+function rotuloCustoCategoria(c){
+  const n = NATUREZAS_CUSTO.find(x => x.codigo === c.natureza);
+  const a = APLICACOES_CUSTO.find(x => x.codigo === c.aplicacao);
+  if (!n || !a) return '⚠ Sem natureza/aplicação (fica fora da Precificação)';
+  return `${n.codigo === 'fixo' ? 'Fixo' : 'Variável'} · ${a.label.split(' ')[0]}`;
+}
+
+function opcoesCustoHtml(lista, selecionado){
+  return '<option value="">— não classificada —</option>' + lista.map(x => `<option value="${x.codigo}"${x.codigo === selecionado ? ' selected' : ''}>${x.label}</option>`).join('');
 }
 
 function opcoesGrupoDreHtml(selecionado){
@@ -285,6 +300,15 @@ function abrirModalCategoriaFinanceira(categoriaExistente){
       <label for="campoGrupoCategoriaFinanceira">Grupo do DRE</label>
       <select id="campoGrupoCategoriaFinanceira">${opcoesGrupoDreHtml(categoriaExistente ? categoriaExistente.grupo_dre : 'despesas_diversas')}</select>
     </div>
+    <div class="form-grupo">
+      <label for="campoNaturezaCategoriaFinanceira">Natureza do custo (só para saídas)</label>
+      <select id="campoNaturezaCategoriaFinanceira">${opcoesCustoHtml(NATUREZAS_CUSTO, categoriaExistente ? categoriaExistente.natureza : null)}</select>
+    </div>
+    <div class="form-grupo">
+      <label for="campoAplicacaoCategoriaFinanceira">Onde é aplicado (só para saídas)</label>
+      <select id="campoAplicacaoCategoriaFinanceira">${opcoesCustoHtml(APLICACOES_CUSTO, categoriaExistente ? categoriaExistente.aplicacao : null)}</select>
+      <span class="item-sub" style="white-space:normal;">Ex.: gás e energia da cozinha = Fixo · Produção; DAS do MEI = Fixo · Administração; entrega ao cliente = Variável · Vendas. Alimenta a página Precificação.</span>
+    </div>
   `;
   modalOverlay.classList.add('aberto');
 }
@@ -295,6 +319,9 @@ async function salvarNovaCategoriaFinanceira(){
   const nome = document.getElementById('campoNomeCategoriaFinanceira').value.trim();
   const tipo = document.getElementById('campoTipoCategoriaFinanceira').value;
   const grupoDre = document.getElementById('campoGrupoCategoriaFinanceira').value;
+  // natureza/aplicação só fazem sentido para saída; entrada fica sem
+  const natureza = tipo === 'saida' ? (document.getElementById('campoNaturezaCategoriaFinanceira').value || null) : null;
+  const aplicacao = tipo === 'saida' ? (document.getElementById('campoAplicacaoCategoriaFinanceira').value || null) : null;
   const id = modoModal.id;
 
   if (!nome){
@@ -308,9 +335,9 @@ async function salvarNovaCategoriaFinanceira(){
 
   let erro;
   if (id){
-    ({ error: erro } = await supabaseClient.from('categorias_financeiras').update({ nome, tipo, grupo_dre: grupoDre }).eq('id', id));
+    ({ error: erro } = await supabaseClient.from('categorias_financeiras').update({ nome, tipo, grupo_dre: grupoDre, natureza, aplicacao }).eq('id', id));
   } else {
-    ({ error: erro } = await supabaseClient.from('categorias_financeiras').insert({ nome, tipo, grupo_dre: grupoDre }));
+    ({ error: erro } = await supabaseClient.from('categorias_financeiras').insert({ nome, tipo, grupo_dre: grupoDre, natureza, aplicacao }));
   }
 
   btnSalvar.disabled = false;

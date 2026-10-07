@@ -402,6 +402,14 @@
     </div>
   </section>
 
+  <!-- PRECIFICAÇÃO (conteúdo montado por precificacao.js) -->
+  <section class="conteudo-modulo" id="moduloPrecificacao" data-modulo="precificacao">
+    <div class="barra-modulo"><h2>Precificação</h2></div>
+    <p class="dash-nota" style="margin:-6px 0 14px;">Três camadas de preço por produto: o <strong>preço mínimo</strong> (custeio variável), o preço que <strong>cobre a produção</strong> (custeio por absorção) e o <strong>preço-alvo</strong> (custeio pleno, com seu lucro desejado).</p>
+    <div id="precifPremissas"></div>
+    <div id="precifResultados"><div class="lista-vazia">Carregando...</div></div>
+  </section>
+
   <!-- INSUMOS -->
   <section class="conteudo-modulo" data-modulo="insumos">
     <div class="barra-modulo">
@@ -596,7 +604,7 @@
     <div class="lista-cards" id="listaFormasPagamento"></div>
 
     <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Categorias financeiras</h3>
-    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Usadas no Controle de caixa pra classificar entradas e saídas e montar a DRE resumida automaticamente.</p>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Usadas no Controle de caixa pra classificar entradas e saídas e montar a DRE resumida automaticamente. Nas saídas, informe também a <strong>natureza</strong> (fixo ou variável) e <strong>onde é aplicada</strong> (produção, vendas ou administração): é isso que alimenta a página Precificação.</p>
     <div class="barra-modulo">
       <button class="btn-novo" id="btnNovaCategoriaFinanceira">+ Nova categoria</button>
     </div>
@@ -607,7 +615,7 @@
             <tr>
               <th>Nome</th>
               <th>Tipo</th>
-              <th>Grupo do DRE</th>
+              <th>Grupo do DRE · custeio</th>
               <th>Editar</th>
               <th>Excluir</th>
             </tr>
@@ -816,6 +824,7 @@
 <script src="vendas.js"></script>
 <script src="caixa.js"></script>
 <script src="configuracoes.js"></script>
+<script src="precificacao.js"></script>
 <script src="init.js"></script>
 </body>
 </html>

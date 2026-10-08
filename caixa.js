@@ -211,6 +211,49 @@ async function carregarCaixa(){
 
   renderizarResumosPorGrupo(data);
 
+  montarOpcoesFiltroCategoriaCaixa(data);
+  renderizarTabelaCaixa();
+}
+
+// --------------------------------------------------------
+// Filtro por categoria (só na tabela de lançamentos; os cartões do topo
+// e o resumo por grupo continuam mostrando o mês inteiro)
+// --------------------------------------------------------
+const SEM_CATEGORIA_CAIXA = '__sem_categoria';
+const chaveCategoriaCaixa = l => (l.categorias_financeiras && l.categoria_id) ? String(l.categoria_id) : SEM_CATEGORIA_CAIXA;
+
+function montarOpcoesFiltroCategoriaCaixa(lancamentos){
+  const select = document.getElementById('filtroCategoriaCaixa');
+  const anterior = select.value;
+  const mapa = {};
+  lancamentos.forEach(l => {
+    const chave = chaveCategoriaCaixa(l);
+    const nome = chave === SEM_CATEGORIA_CAIXA ? '⚠ Sem categoria' : l.categorias_financeiras.nome;
+    (mapa[chave] = mapa[chave] || { chave, nome, qtd: 0 }).qtd++;
+  });
+  const itens = Object.values(mapa).sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
+  select.innerHTML = `<option value="">Todas as categorias (${lancamentos.length})</option>` +
+    itens.map(i => `<option value="${esc(i.chave)}">${esc(i.nome)} (${i.qtd})</option>`).join('');
+  // mantém a escolha se a categoria ainda existe no período; senão volta para "todas"
+  select.value = itens.some(i => i.chave === anterior) ? anterior : '';
+}
+
+function renderizarTabelaCaixa(){
+  const corpo = document.getElementById('corpoTabelaCaixa');
+  const resumoFiltro = document.getElementById('resumoFiltroCaixa');
+  const todos = dadosCarregados.lancamentosCaixa || [];
+  const filtro = document.getElementById('filtroCategoriaCaixa').value;
+  const data = filtro ? todos.filter(l => chaveCategoriaCaixa(l) === filtro) : todos;
+  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  if (filtro){
+    const ent = data.filter(l => l.tipo === 'entrada').reduce((s, l) => s + Number(l.valor), 0);
+    const sai = data.filter(l => l.tipo === 'saida').reduce((s, l) => s + Number(l.valor), 0);
+    resumoFiltro.innerHTML = `<strong>${data.length}</strong> lançamento(s) nesta categoria · entradas <span style="color:var(--verde); font-weight:700;">${formatarMoeda(ent)}</span> · saídas <span style="color:var(--vermelho); font-weight:700;">${formatarMoeda(sai)}</span> · saldo <strong>${(ent - sai) < 0 ? '− ' : ''}${formatarMoeda(Math.abs(ent - sai))}</strong>`;
+  } else {
+    resumoFiltro.innerHTML = '';
+  }
+
   if (data.length === 0){
     corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Nenhum lançamento neste período.</td></tr>';
     return;
@@ -275,6 +318,7 @@ function renderizarResumosPorGrupo(lancamentos){
 
 filtroPeriodoCaixa.value = mesAtualISO();
 filtroPeriodoCaixa.addEventListener('change', carregarCaixa);
+document.getElementById('filtroCategoriaCaixa').addEventListener('change', renderizarTabelaCaixa);
 document.getElementById('btnNovoLancamento').addEventListener('click', () => abrirModalNovoLancamento());
 
 // --------------------------------------------------------

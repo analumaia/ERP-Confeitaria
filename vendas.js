@@ -39,9 +39,97 @@ async function carregarVendas(){
   popularFormularioNovoPedido(respClientes.data || []);
   renderizarItensVendaAtual();
   renderizarItensEmbalagemVendaAtual();
-  renderizarResumoVendas(respPedidos.data);
-  renderizarVendas(respPedidos.data);
+  popularFiltroFormaPagamentoVendas();
+  aplicarFiltrosVendas();
 }
+
+// --------------------------------------------------------
+// Filtros do histórico: período (data do pedido), forma de pagamento,
+// status e busca pelo nome do cliente. Os cartões de resumo e a tabela
+// seguem os mesmos filtros.
+// --------------------------------------------------------
+function popularFiltroFormaPagamentoVendas(){
+  const select = document.getElementById('filtroFormaVendas');
+  const anterior = select.value;
+  select.innerHTML = '<option value="">Todas as formas</option><option value="__sem">Sem forma definida</option>' +
+    formasPagamentoParaVenda.map(f => `<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('');
+  select.value = Array.from(select.options).some(o => o.value === anterior) ? anterior : '';
+}
+
+function lerFiltrosVendas(){
+  return {
+    de: document.getElementById('filtroDeVendas').value,
+    ate: document.getElementById('filtroAteVendas').value,
+    forma: document.getElementById('filtroFormaVendas').value,
+    status: document.getElementById('filtroStatusVendas').value,
+    termo: document.getElementById('filtroClienteVendas').value.trim().toLowerCase(),
+  };
+}
+
+function pedidoPassaFiltros(p, f){
+  const dia = String(p.data_pedido || '').slice(0, 10);
+  if (f.de && dia < f.de) return false;
+  if (f.ate && dia > f.ate) return false;
+  if (f.status && p.status !== f.status) return false;
+  if (f.forma === '__sem' && p.forma_pagamento_id) return false;
+  if (f.forma && f.forma !== '__sem' && String(p.forma_pagamento_id) !== f.forma) return false;
+  if (f.termo){
+    const nome = p.clientes ? String(p.clientes.nome || '') : 'sem cliente';
+    if (!nome.toLowerCase().includes(f.termo)) return false;
+  }
+  return true;
+}
+
+function aplicarFiltrosVendas(){
+  const todos = dadosCarregados.pedidos || [];
+  const f = lerFiltrosVendas();
+  const ativo = !!(f.de || f.ate || f.forma || f.status || f.termo);
+  const filtrados = ativo ? todos.filter(p => pedidoPassaFiltros(p, f)) : todos;
+
+  document.getElementById('resumoFiltroVendas').textContent = ativo
+    ? `Mostrando ${filtrados.length} de ${todos.length} pedido(s) — os cartões acima também seguem os filtros.` : '';
+  document.getElementById('btnLimparFiltrosVendas').style.visibility = ativo ? 'visible' : 'hidden';
+
+  renderizarResumoVendas(filtrados);
+  renderizarVendas(filtrados, ativo);
+}
+
+function aplicarAtalhoPeriodoVendas(valor){
+  const hoje = hojeISO();
+  const mes = mesAtualISO();
+  const [ano, m] = mes.split('-').map(Number);
+  const iso = d => dataLocalISO(d);
+  let de = '', ate = '';
+  if (valor === 'hoje'){ de = ate = hoje; }
+  else if (valor === '7d'){ const d = agoraBrasilia(); d.setDate(d.getDate() - 6); de = iso(d); ate = hoje; }
+  else if (valor === '30d'){ const d = agoraBrasilia(); d.setDate(d.getDate() - 29); de = iso(d); ate = hoje; }
+  else if (valor === 'mes'){ de = limitesDoMes(mes).primeiroDia; ate = limitesDoMes(mes).ultimoDia; }
+  else if (valor === 'mes_passado'){
+    const anterior = new Date(ano, m - 2, 1);
+    const chave = `${anterior.getFullYear()}-${String(anterior.getMonth() + 1).padStart(2, '0')}`;
+    de = limitesDoMes(chave).primeiroDia; ate = limitesDoMes(chave).ultimoDia;
+  }
+  else if (valor === 'ano'){ de = `${ano}-01-01`; ate = `${ano}-12-31`; }
+  else if (valor !== 'todos') return;
+  document.getElementById('filtroDeVendas').value = de;
+  document.getElementById('filtroAteVendas').value = ate;
+  aplicarFiltrosVendas();
+}
+
+(function ligarFiltrosVendas(){
+  const ids = ['filtroDeVendas', 'filtroAteVendas', 'filtroFormaVendas', 'filtroStatusVendas'];
+  ids.forEach(id => document.getElementById(id).addEventListener('change', aplicarFiltrosVendas));
+  document.getElementById('filtroClienteVendas').addEventListener('input', aplicarFiltrosVendas);
+  document.getElementById('filtroAtalhoVendas').addEventListener('change', evento => {
+    aplicarAtalhoPeriodoVendas(evento.target.value);
+    evento.target.value = '';
+  });
+  document.getElementById('btnLimparFiltrosVendas').addEventListener('click', () => {
+    ids.forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('filtroClienteVendas').value = '';
+    aplicarFiltrosVendas();
+  });
+})();
 
 function renderizarResumoVendas(pedidos){
   const confirmados = pedidos.filter(p => p.status === 'confirmado');
@@ -59,7 +147,8 @@ function renderizarResumoVendas(pedidos){
     freteTotal += frete;
     // frete é cobrado a mais do cliente (soma na receita) — mas ainda passa
     // pela maquininha junto com os itens, então entra na base da taxa também
-    deducoesTotais += desconto + (totalComDesconto + frete) * (taxaPct / 100);
+    const taxaPedido = (p.taxa_total !== null && p.taxa_total !== undefined) ? Number(p.taxa_total) : (totalComDesconto + frete) * (taxaPct / 100);
+    deducoesTotais += desconto + taxaPedido;
   });
   const recebidoLiquido = faturamentoBruto + freteTotal - deducoesTotais;
 
@@ -84,10 +173,10 @@ function renderizarResumoVendas(pedidos){
   `;
 }
 
-function renderizarVendas(pedidos){
+function renderizarVendas(pedidos, filtrando){
   const corpo = document.getElementById('corpoTabelaVendas');
   if (pedidos.length === 0){
-    corpo.innerHTML = '<tr><td colspan="8" class="lista-vazia">Nenhum pedido registrado ainda.</td></tr>';
+    corpo.innerHTML = `<tr><td colspan="8" class="lista-vazia">${filtrando ? 'Nenhum pedido encontrado com esses filtros.' : 'Nenhum pedido registrado ainda.'}</td></tr>`;
     return;
   }
 
@@ -101,7 +190,7 @@ function renderizarVendas(pedidos){
     const frete = Number(pedido.valor_frete || 0);
     const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
     // frete é cobrado a mais do cliente (soma), mas ainda entra na base da taxa (passa pela maquininha)
-    const taxa = (valorPedido + frete) * (taxaPct / 100);
+    const taxa = (pedido.taxa_total !== null && pedido.taxa_total !== undefined) ? Number(pedido.taxa_total) : (valorPedido + frete) * (taxaPct / 100);
     const valorFinal = valorPedido + frete - taxa;
     const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
 

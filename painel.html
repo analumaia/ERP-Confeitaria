@@ -331,6 +331,50 @@
     </div>
 
     <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Pedidos registrados</h3>
+    <div class="cartao-item dre-controles" style="margin-bottom:8px;">
+      <div class="dre-campo">
+        <label for="filtroDeVendas" class="item-sub">Período (data do pedido)</label>
+        <div class="dre-mes">
+          <input type="date" id="filtroDeVendas" class="campo-busca" aria-label="Data inicial">
+          <input type="date" id="filtroAteVendas" class="campo-busca" aria-label="Data final">
+        </div>
+      </div>
+      <div class="dre-campo">
+        <label for="filtroAtalhoVendas" class="item-sub">Atalhos</label>
+        <select id="filtroAtalhoVendas" class="campo-busca">
+          <option value="">Escolher...</option>
+          <option value="hoje">Hoje</option>
+          <option value="7d">Últimos 7 dias</option>
+          <option value="30d">Últimos 30 dias</option>
+          <option value="mes">Este mês</option>
+          <option value="mes_passado">Mês passado</option>
+          <option value="ano">Este ano</option>
+          <option value="todos">Todo o período</option>
+        </select>
+      </div>
+      <div class="dre-campo">
+        <label for="filtroFormaVendas" class="item-sub">Forma de pagamento</label>
+        <select id="filtroFormaVendas" class="campo-busca"><option value="">Todas as formas</option></select>
+      </div>
+      <div class="dre-campo">
+        <label for="filtroStatusVendas" class="item-sub">Status</label>
+        <select id="filtroStatusVendas" class="campo-busca">
+          <option value="">Todos</option>
+          <option value="aberto">Em aberto</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="dre-campo" style="flex:1; min-width:180px;">
+        <label for="filtroClienteVendas" class="item-sub">Cliente</label>
+        <input type="search" id="filtroClienteVendas" class="campo-busca" placeholder="Nome do cliente..." style="max-width:none;">
+      </div>
+      <div class="dre-campo">
+        <button type="button" class="btn-secundario" id="btnLimparFiltrosVendas" style="visibility:hidden;">Limpar filtros</button>
+      </div>
+    </div>
+    <div class="item-sub" id="resumoFiltroVendas" style="white-space:normal; margin:0 2px 10px;"></div>
+
     <div class="cartao-item relatorio-cadastro">
       <div class="tabela-container">
         <table class="tabela-movimentacoes tabela-cadastro">

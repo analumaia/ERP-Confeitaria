@@ -1360,3 +1360,20 @@ h1, h2, h3, .fonte-titulo{
 .dre-tabela .dre-linha-final .dre-rot{ background: var(--bege-escuro); }
 .dre-tabela .dre-linha-info td{ font-size: 0.82rem; color: var(--marrom-cafe); }
 .dre-tabela .dre-rot .item-sub{ display: block; font-weight: 400; white-space: normal; }
+
+
+/* ---------------------------------------------------------
+   INSUMOS — tudo cabe na largura da tela: os produtos/fichas
+   relacionados quebram em quantas linhas forem necessárias
+--------------------------------------------------------- */
+.tabela-insumos{ min-width: 0; }
+.tabela-insumos th{ white-space: normal; }
+.tabela-insumos td{ padding: 10px 12px; vertical-align: middle; }
+.tabela-insumos th{ padding: 12px; }
+.tabela-insumos .celula-relacionados{ white-space: normal; width: 100%; min-width: 150px; line-height: 1.1; }
+.tabela-insumos .celula-relacionados .tag-produto{ margin: 2px 6px 2px 0; }
+.tabela-insumos td:not(.celula-relacionados):not(.celula-principal){ white-space: nowrap; }
+.tabela-insumos .celula-principal{ white-space: normal; min-width: 130px; }
+@media (max-width: 760px){
+  .tabela-insumos{ min-width: 720px; } /* em celular volta a rolar de lado, em vez de espremer tudo */
+}

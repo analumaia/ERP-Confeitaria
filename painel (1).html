@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel — ERP Bakeria</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="cabecalho">
+  <div class="cabecalho-interno">
+    <div class="cabecalho-esq">
+      <button class="btn-menu" id="btnMenu" aria-label="Abrir menu" aria-controls="menuLateral" aria-expanded="false">☰</button>
+      <div class="logo-caixa"><img src="logo.png" alt="Bakeria Confeitaria Artesanal"></div>
+    </div>
+    <img class="mascote-cabecalho" src="mascote-cabecalho.png" alt="">
+    <button class="btn-sair" id="btnSair">Sair</button>
+  </div>
+</header>
+
+<div class="menu-fundo" id="menuFundo"></div>
+
+<div class="layout-painel">
+
+  <aside class="menu-lateral" id="menuLateral">
+    <nav class="abas-modulos" id="abasModulos" aria-label="Menu principal"></nav>
+  </aside>
+
+  <main class="area-principal">
+
+  <!-- DASHBOARD -->
+  <section class="conteudo-modulo" data-modulo="dashboard">
+    <div class="barra-modulo">
+      <h2>Visão geral do negócio</h2>
+      <div class="filtro-periodo">
+        <label for="filtroMesDashboard">Período:</label>
+        <input type="month" id="filtroMesDashboard">
+      </div>
+    </div>
+    <div class="dashboard" id="listaDashboard"></div>
+  </section>
+
+  <!-- ESTOQUE -->
+  <section class="conteudo-modulo" data-modulo="estoque">
+    <div class="barra-modulo"><h2>Estoque</h2></div>
+
+    <div class="filtro-periodo filtro-periodo-largo">
+      <label for="periodoEstoqueDe">Período:</label>
+      <input type="date" id="periodoEstoqueDe" aria-label="Data inicial">
+      <span>até</span>
+      <input type="date" id="periodoEstoqueAte" aria-label="Data final">
+      <div class="chips-periodo">
+        <button type="button" class="chip-periodo" data-periodo-estoque="mes">Este mês</button>
+        <button type="button" class="chip-periodo" data-periodo-estoque="anterior">Mês anterior</button>
+        <button type="button" class="chip-periodo" data-periodo-estoque="tudo">Tudo</button>
+      </div>
+    </div>
+
+    <div class="cartao-item item-estoque">
+      <div class="item-estoque-topo">
+        <div class="combo-item">
+          <span class="combo-icone" aria-hidden="true">🔍</span>
+          <input type="text" id="buscaItemEstoque" class="combo-input" placeholder="Buscar insumo, produto, ficha técnica ou embalagem..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="listaComboItem" aria-autocomplete="list">
+          <button type="button" class="combo-limpar" id="btnLimparItemEstoque" aria-label="Limpar seleção" hidden>×</button>
+          <div class="combo-lista" id="listaComboItem" role="listbox" hidden></div>
+        </div>
+        <div class="etiquetas-item" id="etiquetasItemEstoque"></div>
+      </div>
+      <div class="acoes-estoque">
+        <button type="button" class="btn-acao" id="btnEntradaItem" disabled>+ Entrada</button>
+        <button type="button" class="btn-acao" id="btnSaidaItem" disabled>− Saída</button>
+        <button type="button" class="btn-acao" id="btnBalancoItem" disabled>📋 Balanço</button>
+      </div>
+    </div>
+
+    <div class="estoque-resumo">
+      <div class="cartao-item kpi">
+        <div class="kpi-titulo">Saldo atual</div>
+        <div class="kpi-valor" id="saldoItemEstoque">—</div>
+        <div class="item-sub" id="minimoItemEstoque"></div>
+      </div>
+      <div class="cartao-item kpi">
+        <div class="kpi-titulo">Total de entradas</div>
+        <div class="kpi-valor valor-entrada" id="totalEntradasEstoque">—</div>
+        <div class="item-sub" id="subEntradasEstoque"></div>
+      </div>
+      <div class="cartao-item kpi">
+        <div class="kpi-titulo">Total de saídas</div>
+        <div class="kpi-valor valor-saida" id="totalSaidasEstoque">—</div>
+        <div class="item-sub" id="subSaidasEstoque"></div>
+      </div>
+    </div>
+
+    <div class="cartao-item relatorio-estoque">
+      <div class="titulo-item"><span>Extrato de movimentações</span><span class="item-sub" id="notaExtratoEstoque"></span></div>
+      <div id="tabelaItemEstoque"></div>
+    </div>
+  </section>
+
+  <!-- COMPRAS -->
+  <section class="conteudo-modulo" data-modulo="compras">
+    <div class="barra-modulo"><h2>Compras</h2></div>
+
+    <div class="compras-layout">
+
+      <!-- Nova compra (formulário fixo) -->
+      <form class="cartao-item cartao-nova-compra" id="formNovaCompra" novalidate>
+        <div class="compra-corpo">
+          <h3 class="compra-titulo">Nova compra</h3>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoFornecedorCompra">Fornecedor</label>
+              <select id="campoFornecedorCompra"><option value="">Selecione o fornecedor...</option></select>
+            </div>
+            <div class="form-grupo">
+              <label for="campoDataCompra">Data</label>
+              <input type="date" id="campoDataCompra">
+            </div>
+          </div>
+
+          <div class="compra-secao-titulo">Itens</div>
+          <div id="itensCompra"></div>
+          <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemCompra">+ Adicionar insumo</button>
+        </div>
+
+        <div class="compra-rodape-frete">
+          <div class="compra-frete-linha">
+            <label for="campoFreteCompra">Frete</label>
+            <input type="number" id="campoFreteCompra" min="0" step="0.01" value="0" placeholder="Valor">
+          </div>
+          <div class="item-sub" id="rateioFreteCompra"></div>
+          <div class="compra-total-linha"><span>Total da compra</span><span id="totalCompra">R$ 0,00</span></div>
+        </div>
+
+        <div class="compra-acoes">
+          <button type="button" class="compra-btn-cancelar" id="btnCancelarCompra">Cancelar</button>
+          <button type="submit" class="compra-btn-salvar" id="btnSalvarCompra">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Relatório -->
+      <div class="cartao-item cartao-relatorio-compras">
+        <div class="filtro-periodo filtro-periodo-largo" style="margin-bottom:0;">
+          <label for="periodoComprasDe">Período:</label>
+          <input type="date" id="periodoComprasDe" aria-label="Data inicial">
+          <span>até</span>
+          <input type="date" id="periodoComprasAte" aria-label="Data final">
+          <div class="chips-periodo">
+            <button type="button" class="chip-periodo" data-periodo-compras="mes">Este mês</button>
+            <button type="button" class="chip-periodo" data-periodo-compras="anterior">Mês anterior</button>
+            <button type="button" class="chip-periodo" data-periodo-compras="tudo">Tudo</button>
+          </div>
+        </div>
+        <div class="compras-resumo" id="resumoCompras"></div>
+        <div class="compras-lista" id="listaCompras"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PRODUÇÃO -->
+  <section class="conteudo-modulo" data-modulo="producao">
+    <div class="barra-modulo"><h2>Produção</h2></div>
+
+    <form class="cartao-item cartao-nova-compra cartao-producao" id="formProducao" novalidate>
+      <div class="compra-corpo">
+        <h3 class="compra-titulo">Nova produção</h3>
+        <div class="producao-linha-topo">
+          <select id="campoItemProducao" aria-label="Ficha técnica ou produto">
+            <option value="">Selecione...</option>
+          </select>
+          <input type="number" id="campoQuantidadeProducao" step="0.0001" min="0.0001" placeholder="Qtda." title="Até 4 casas decimais" aria-label="Quantidade produzida">
+          <input type="date" id="campoDataProducao" aria-label="Data da produção">
+        </div>
+        <div class="form-grupo" style="margin-top:14px;">
+          <textarea id="campoObservacaoProducao" rows="3" placeholder="Observação (opcional)" class="textarea-producao"></textarea>
+        </div>
+      </div>
+      <div class="compra-acoes">
+        <button type="button" class="compra-btn-cancelar" id="btnCancelarProducao">Cancelar</button>
+        <button type="submit" class="compra-btn-salvar" id="btnSalvarProducao">Salvar</button>
+      </div>
+    </form>
+
+    <div class="cartao-item" style="margin-top:20px;">
+      <div class="titulo-item"><span>Estoque das fichas técnicas</span></div>
+      <div class="estoque-fichas-tiras" id="estoqueFichasProducao"></div>
+
+      <div class="titulo-item" style="margin-top:18px;"><span>Histórico de produções</span></div>
+      <div class="lista-cards" id="listaProducoes"></div>
+    </div>
+  </section>
+
+  <!-- FICHAS TÉCNICAS -->
+  <section class="conteudo-modulo" data-modulo="fichas">
+    <div class="barra-modulo"><h2>Fichas técnicas</h2></div>
+
+    <div class="fichas-layout">
+
+      <!-- Nova ficha técnica / editar (formulário fixo) -->
+      <form class="cartao-item cartao-nova-compra" id="formFicha" novalidate>
+        <div class="compra-corpo">
+          <h3 class="compra-titulo" id="tituloFormFicha">Nova ficha técnica</h3>
+
+          <div class="form-grupo">
+            <label for="campoNomeFicha">Nome</label>
+            <input type="text" id="campoNomeFicha" placeholder="Massa de baunilha, recheio de brigadeiro...">
+          </div>
+
+          <div class="compra-secao-titulo">Item</div>
+          <div id="itensFicha"></div>
+          <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemFicha">+ Adicionar insumo</button>
+
+          <div class="compra-secao-titulo" style="margin-top:20px;">Rendimento</div>
+          <div class="form-grupo" style="display:flex; gap:8px;">
+            <div style="flex:1;">
+              <input type="number" id="campoRendimentoFicha" step="0.0001" min="0.0001" placeholder="Valor" title="Até 4 casas decimais" aria-label="Valor do rendimento">
+            </div>
+            <div style="width:110px;">
+              <input type="text" id="campoUnidadeFicha" placeholder="Medida" aria-label="Unidade de medida">
+            </div>
+          </div>
+        </div>
+
+        <div class="compra-rodape-frete">
+          <div class="compra-frete-linha"><span>Valor do lote:</span><span id="valorLoteFicha">—</span></div>
+          <div class="compra-frete-linha"><span>Valor por unidade:</span><span id="valorUnidadeFicha">—</span></div>
+        </div>
+
+        <div class="compra-acoes">
+          <button type="button" class="compra-btn-cancelar" id="btnCancelarFicha">Cancelar</button>
+          <button type="submit" class="compra-btn-salvar" id="btnSalvarFicha">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Fichas cadastradas -->
+      <div class="lista-cards fichas-grade" id="listaFichas"></div>
+
+    </div>
+  </section>
+
+  <!-- VENDAS -->
+  <section class="conteudo-modulo" data-modulo="vendas">
+    <div class="barra-modulo"><h2>Vendas</h2></div>
+
+    <div class="lista-cards" id="resumoVendas" style="margin-bottom:20px;"></div>
+
+    <div class="cartao-item" id="cartaoNovoPedido" style="margin-bottom:24px;">
+      <div class="titulo-item"><span id="tituloNovoPedido">Novo pedido</span></div>
+
+      <div class="form-linha-dupla" style="margin-top:10px;">
+        <div class="form-grupo">
+          <label for="campoClienteVenda">Cliente</label>
+          <select id="campoClienteVenda"><option value="">Sem cliente</option></select>
+        </div>
+        <div class="form-grupo">
+          <label for="campoFormaPagamentoVenda">Forma de pagamento</label>
+          <select id="campoFormaPagamentoVenda"><option value="">Não definida</option></select>
+        </div>
+      </div>
+      <div class="form-grupo">
+        <label for="campoDataVenda">Data</label>
+        <input type="date" id="campoDataVenda">
+      </div>
+
+      <div class="compra-secao-titulo">Pedido</div>
+      <div class="form-linha-dupla" style="align-items:end;">
+        <div class="form-grupo">
+          <label for="campoProdutoVenda">Produto</label>
+          <select id="campoProdutoVenda"><option value="">Escolha um produto</option></select>
+        </div>
+        <div class="form-grupo" style="display:flex; gap:8px;">
+          <div style="flex:1;">
+            <label for="campoQuantidadeVenda">Quantidade</label>
+            <input type="number" id="campoQuantidadeVenda" value="1" min="1" step="1">
+          </div>
+          <button type="button" class="btn-secundario" id="btnAdicionarItemVenda" style="flex:none; align-self:flex-end; padding:10px 16px;">Adicionar</button>
+        </div>
+      </div>
+      <div id="itensVendaLista" style="margin:10px 0;"></div>
+
+      <div class="compra-secao-titulo">Embalagem</div>
+      <p class="item-sub" style="margin:-6px 0 8px;">Só pra controle de estoque — a embalagem não é cobrada do cliente nem entra no total do pedido.</p>
+      <div class="form-linha-dupla" style="align-items:end;">
+        <div class="form-grupo">
+          <label for="campoEmbalagemVenda">Embalagem</label>
+          <select id="campoEmbalagemVenda"><option value="">Escolha uma embalagem</option></select>
+        </div>
+        <div class="form-grupo" style="display:flex; gap:8px;">
+          <div style="flex:1;">
+            <label for="campoQuantidadeEmbalagemVenda">Quantidade</label>
+            <input type="number" id="campoQuantidadeEmbalagemVenda" value="1" min="1" step="1">
+          </div>
+          <button type="button" class="btn-secundario" id="btnAdicionarEmbalagemVenda" style="flex:none; align-self:flex-end; padding:10px 16px;">Adicionar</button>
+        </div>
+      </div>
+      <div id="itensEmbalagemVendaLista" style="margin:10px 0;"></div>
+
+      <div class="form-grupo">
+        <label for="campoObservacaoVenda">Observação</label>
+        <textarea id="campoObservacaoVenda" rows="2" placeholder="Recheio sem nozes, entrega às 15h..." style="width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--marrom-claro); font-family:inherit; font-size:0.92rem; resize:vertical;"></textarea>
+      </div>
+      <div class="form-grupo">
+        <label for="campoFreteVenda">Frete (R$)</label>
+        <input type="number" id="campoFreteVenda" value="0" min="0" step="0.01">
+      </div>
+      <div class="form-grupo">
+        <label for="campoDescontoVenda">Desconto</label>
+        <div style="display:flex; gap:8px;">
+          <input type="number" id="campoDescontoVenda" value="0" min="0" step="0.01" style="flex:1;">
+          <button type="button" class="btn-secundario" id="btnModoDescontoVenda" style="white-space:nowrap; width:80px;">R$</button>
+        </div>
+      </div>
+
+      <div class="cartao-item" style="background:var(--bege-claro); box-shadow:none; margin-top:6px;">
+        <div class="linha-info"><span>Total do pedido</span><span id="totalPedidoVenda">R$ 0,00</span></div>
+        <div class="linha-info"><span>Desconto</span><span id="descontoPedidoVenda" class="valor-saida">− R$ 0,00</span></div>
+        <div class="linha-info"><span>Frete</span><span id="fretePedidoVenda" class="valor-entrada">+ R$ 0,00</span></div>
+        <div class="linha-info"><span>Taxa</span><span id="taxaPedidoVenda" class="valor-saida">− R$ 0,00</span></div>
+        <div class="linha-info" style="font-weight:700; border-top:1px solid var(--bege); padding-top:6px; margin-top:2px;"><span>Você recebe</span><span id="liquidoPedidoVenda">R$ 0,00</span></div>
+      </div>
+
+      <div class="compra-acoes" style="margin-top:14px;">
+        <button type="button" class="compra-btn-cancelar" id="btnCancelarVenda">Cancelar</button>
+        <button type="button" class="compra-btn-salvar" id="btnRegistrarVenda">Registrar pedido</button>
+      </div>
+    </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Pedidos registrados</h3>
+    <div class="cartao-item dre-controles" style="margin-bottom:8px;">
+      <div class="dre-campo">
+        <label for="filtroDeVendas" class="item-sub">Período (data do pedido)</label>
+        <div class="dre-mes">
+          <input type="date" id="filtroDeVendas" class="campo-busca" aria-label="Data inicial">
+          <input type="date" id="filtroAteVendas" class="campo-busca" aria-label="Data final">
+        </div>
+      </div>
+      <div class="dre-campo">
+        <label for="filtroAtalhoVendas" class="item-sub">Atalhos</label>
+        <select id="filtroAtalhoVendas" class="campo-busca">
+          <option value="">Escolher...</option>
+          <option value="hoje">Hoje</option>
+          <option value="7d">Últimos 7 dias</option>
+          <option value="30d">Últimos 30 dias</option>
+          <option value="mes">Este mês</option>
+          <option value="mes_passado">Mês passado</option>
+          <option value="ano">Este ano</option>
+          <option value="todos">Todo o período</option>
+        </select>
+      </div>
+      <div class="dre-campo">
+        <label for="filtroFormaVendas" class="item-sub">Forma de pagamento</label>
+        <select id="filtroFormaVendas" class="campo-busca"><option value="">Todas as formas</option></select>
+      </div>
+      <div class="dre-campo">
+        <label for="filtroStatusVendas" class="item-sub">Status</label>
+        <select id="filtroStatusVendas" class="campo-busca">
+          <option value="">Todos</option>
+          <option value="aberto">Em aberto</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="dre-campo" style="flex:1; min-width:180px;">
+        <label for="filtroClienteVendas" class="item-sub">Cliente</label>
+        <input type="search" id="filtroClienteVendas" class="campo-busca" placeholder="Nome do cliente..." style="max-width:none;">
+      </div>
+      <div class="dre-campo">
+        <button type="button" class="btn-secundario" id="btnLimparFiltrosVendas" style="visibility:hidden;">Limpar filtros</button>
+      </div>
+    </div>
+    <div class="item-sub" id="resumoFiltroVendas" style="white-space:normal; margin:0 2px 10px;"></div>
+
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nº</th>
+              <th>Data do pedido</th>
+              <th>Cliente</th>
+              <th>Forma de pagamento</th>
+              <th>Valor do pedido</th>
+              <th>Valor final (com taxas)</th>
+              <th>Ações</th>
+              <th>Cancelar</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaVendas"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINANCEIRO (reservado para novos recursos) -->
+  <section class="conteudo-modulo" data-modulo="financeiro">
+    <div class="barra-modulo"><h2>Financeiro</h2></div>
+    <div class="lista-vazia">Área reservada para novos recursos financeiros. Por enquanto, use o Controle de caixa.</div>
+  </section>
+
+  <!-- CONTROLE DE CAIXA -->
+  <section class="conteudo-modulo" data-modulo="caixa">
+    <div class="barra-modulo"><h2>Controle de caixa</h2></div>
+
+    <div class="lista-cards" id="resumoCaixa" style="margin-bottom:16px;"></div>
+
+    <div class="item-sub" style="white-space:normal; margin-bottom:16px;">O resultado por competência (lucro, CMV, margens) fica em <strong>Financeiro → Relatório DRE</strong>. Aqui você vê só o dinheiro que entrou e saiu.</div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Resumo por grupo</h3>
+    <div class="lista-cards" id="gradeResumosCaixa" style="margin-bottom:20px;"></div>
+
+    <div class="barra-modulo">
+      <div style="display:flex; align-items:center; gap:10px; flex:1;">
+        <label for="filtroPeriodoCaixa" class="item-sub" style="white-space:nowrap;">Período:</label>
+        <input type="month" id="filtroPeriodoCaixa" class="campo-busca" style="max-width:200px;">
+        <label for="filtroCategoriaCaixa" class="item-sub" style="white-space:nowrap;">Categoria:</label>
+        <select id="filtroCategoriaCaixa" class="campo-busca" style="max-width:260px;"><option value="">Todas as categorias</option></select>
+      </div>
+      <button class="btn-novo" id="btnNovoLancamento">+ Lançamento manual</button>
+    </div>
+
+    <div class="item-sub" id="resumoFiltroCaixa" style="white-space:normal; margin:0 2px 10px;"></div>
+
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Categoria</th>
+              <th>Origem</th>
+              <th>Observação</th>
+              <th>Valor</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaCaixa"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- RELATÓRIO DRE (conteúdo montado por dre.js) -->
+  <section class="conteudo-modulo" data-modulo="dre">
+    <div class="barra-modulo"><h2>Relatório DRE</h2></div>
+
+    <div class="cartao-item dre-controles">
+      <div class="dre-campo">
+        <label for="dreModo" class="item-sub">Ver</label>
+        <select id="dreModo" class="campo-busca">
+          <option value="mes">Um mês</option>
+          <option value="periodo">Período</option>
+        </select>
+      </div>
+      <div class="dre-campo" id="dreBlocoMes">
+        <label for="dreMes" class="item-sub">Mês</label>
+        <div class="dre-mes">
+          <button type="button" class="btn-acao" id="dreMesAnterior" aria-label="Mês anterior">‹</button>
+          <input type="month" id="dreMes" class="campo-busca">
+          <button type="button" class="btn-acao" id="dreMesSeguinte" aria-label="Mês seguinte">›</button>
+        </div>
+      </div>
+      <div class="dre-campo" id="dreBlocoPeriodo" style="display:none;">
+        <label for="dreDe" class="item-sub">De / até</label>
+        <div class="dre-mes">
+          <input type="date" id="dreDe" class="campo-busca">
+          <input type="date" id="dreAte" class="campo-busca">
+        </div>
+      </div>
+      <div class="dre-campo">
+        <label for="dreAtalhos" class="item-sub">Atalhos</label>
+        <select id="dreAtalhos" class="campo-busca">
+          <option value="">Escolher...</option>
+          <option value="3m">Últimos 3 meses</option>
+          <option value="6m">Últimos 6 meses</option>
+          <option value="ano">Este ano</option>
+          <option value="ano_passado">Ano passado</option>
+        </select>
+      </div>
+      <div class="dre-campo" style="margin-left:auto;">
+        <button type="button" class="btn-secundario" id="dreBaixarCsv">Baixar CSV</button>
+      </div>
+    </div>
+    <div class="item-sub" id="dreAviso" style="margin:6px 2px;"></div>
+
+    <div class="lista-cards" id="dreResumo" style="margin:16px 0;"></div>
+    <div id="dreCorpo"><div class="lista-vazia">Carregando...</div></div>
+    <div id="dreComposicao"></div>
+  </section>
+
+  <!-- PRECIFICAÇÃO (conteúdo montado por precificacao.js) -->
+  <section class="conteudo-modulo" id="moduloPrecificacao" data-modulo="precificacao">
+    <div class="barra-modulo"><h2>Precificação</h2></div>
+
+    <div class="compras-layout">
+      <!-- Premissas (formulário fixo, igual a Compras/Produção) -->
+      <form class="cartao-item cartao-nova-compra" id="precifPremissas" novalidate></form>
+
+      <!-- Alertas e indicadores -->
+      <div id="precifResumo"></div>
+    </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 4px;">Embalagens por produto</h3>
+    <div class="item-sub" style="white-space:normal; margin-bottom:10px;">Relacione as embalagens de cada produto (pode ser mais de uma). Elas entram no custo variável de cada unidade.</div>
+    <div id="precifEmbalagens"></div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Preços por produto</h3>
+    <div id="precifTabela"><div class="lista-vazia">Carregando...</div></div>
+    <div id="precifDetalhe"></div>
+    <div id="precifLegenda"></div>
+  </section>
+
+  <!-- INSUMOS -->
+  <section class="conteudo-modulo" data-modulo="insumos">
+    <div class="barra-modulo">
+      <h2>Insumos</h2>
+      <input type="search" class="campo-busca" placeholder="Insumo (pesquisa)" id="campoBuscaInsumo">
+      <button class="btn-novo" id="btnNovoInsumo">+ Novo insumo</button>
+    </div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro tabela-insumos">
+          <thead>
+            <tr>
+              <th>Nome do insumo</th>
+              <th>Fichas técnicas/produtos relacionados</th>
+              <th>Unidade de medida</th>
+              <th>Custo unitário</th>
+              <th>Estoque mínimo</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaInsumos"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMBALAGENS -->
+  <section class="conteudo-modulo" data-modulo="embalagens">
+    <div class="barra-modulo">
+      <h2>Embalagens</h2>
+      <input type="search" class="campo-busca" placeholder="Embalagem (pesquisa)" id="campoBuscaEmbalagem">
+      <button class="btn-novo" id="btnNovaEmbalagem">+ Nova embalagem</button>
+    </div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome da embalagem</th>
+              <th>Custo unitário</th>
+              <th>Dimensões</th>
+              <th>Estoque mín.</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaEmbalagens"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRODUTOS -->
+  <section class="conteudo-modulo" data-modulo="produtos">
+    <div class="barra-modulo">
+      <h2>Produtos</h2>
+      <input type="search" class="campo-busca" placeholder="Produto (pesquisa)" id="campoBuscaProduto">
+      <button class="btn-novo" id="btnNovoProduto">+ Novo produto</button>
+    </div>
+    <div class="cartao-item relatorio-produtos">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-produtos">
+          <thead>
+            <tr>
+              <th>Nome do produto</th>
+              <th>Categoria</th>
+              <th>Preço</th>
+              <th>Custo un.</th>
+              <th>Estoque mínimo</th>
+              <th>Ações</th>
+              <th>Situação</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaProdutos"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FORNECEDORES -->
+  <section class="conteudo-modulo" data-modulo="fornecedores">
+    <div class="barra-modulo">
+      <h2>Fornecedores</h2>
+      <input type="search" class="campo-busca" placeholder="Fornecedor (pesquisa)" data-busca="fornecedores">
+      <button class="btn-novo" data-novo="fornecedores">+ Novo fornecedor</button>
+    </div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome do fornecedor</th>
+              <th>Contato</th>
+              <th>Prazo</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody data-tabela-corpo="fornecedores"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLIENTES -->
+  <section class="conteudo-modulo" data-modulo="clientes">
+    <div class="barra-modulo"><h2>Clientes</h2></div>
+
+    <div class="fichas-layout">
+
+      <!-- Novo cliente / editar (formulário fixo) -->
+      <form class="cartao-item cartao-nova-compra" id="formCliente" novalidate>
+        <div class="compra-corpo">
+          <h3 class="compra-titulo" id="tituloFormCliente">Novo cliente</h3>
+
+          <div class="form-grupo">
+            <label for="campoNomeCliente">Nome</label>
+            <input type="text" id="campoNomeCliente" placeholder="Nome do cliente">
+          </div>
+
+          <div class="form-grupo">
+            <label for="campoTelefoneCliente">Telefone</label>
+            <input type="text" id="campoTelefoneCliente" placeholder="(00) 00000-0000">
+          </div>
+
+          <div class="form-grupo">
+            <label for="campoCepCliente">CEP</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="campoCepCliente" placeholder="00000-000" inputmode="numeric" maxlength="9" style="flex:1;">
+              <button type="button" class="btn-secundario" id="btnBuscarCep" style="white-space:nowrap;">Buscar CEP</button>
+            </div>
+            <div class="item-sub" id="statusCepCliente"></div>
+          </div>
+
+          <div class="form-grupo">
+            <label for="campoRuaCliente">Rua</label>
+            <input type="text" id="campoRuaCliente" placeholder="Rua, avenida...">
+          </div>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoBairroCliente">Bairro</label>
+              <input type="text" id="campoBairroCliente">
+            </div>
+            <div class="form-grupo">
+              <label for="campoNumeroCliente">Nº</label>
+              <input type="text" id="campoNumeroCliente" placeholder="Número">
+            </div>
+          </div>
+
+          <div class="form-linha-dupla">
+            <div class="form-grupo">
+              <label for="campoCidadeCliente">Cidade</label>
+              <input type="text" id="campoCidadeCliente">
+            </div>
+            <div class="form-grupo">
+              <label for="campoUfCliente">UF</label>
+              <input type="text" id="campoUfCliente" placeholder="MG" maxlength="2" style="text-transform:uppercase;">
+            </div>
+          </div>
+        </div>
+
+        <div class="compra-acoes">
+          <button type="button" class="compra-btn-cancelar" id="btnCancelarCliente">Cancelar</button>
+          <button type="submit" class="compra-btn-salvar" id="btnSalvarCliente">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Clientes cadastrados -->
+      <div class="lista-cards fichas-grade" id="listaClientes"></div>
+
+    </div>
+  </section>
+
+  <!-- CONFIGURAÇÕES -->
+  <section class="conteudo-modulo" data-modulo="configuracoes">
+    <div class="barra-modulo"><h2>Configurações</h2></div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Metas mensais</h3>
+    <div class="barra-modulo">
+      <input type="month" id="filtroMesMetas" class="campo-busca" style="max-width:160px;">
+      <button class="btn-novo" id="btnNovaMeta">+ Nova meta</button>
+    </div>
+    <div class="lista-cards" id="listaMetas"></div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Formas de pagamento</h3>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">A taxa configurada aqui é aplicada automaticamente sobre o valor de cada venda feita com essa forma de pagamento.</p>
+    <div class="barra-modulo">
+      <button class="btn-novo" id="btnNovaFormaPagamento">+ Nova forma de pagamento</button>
+    </div>
+    <div class="lista-cards" id="listaFormasPagamento"></div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Categorias financeiras</h3>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Usadas no Controle de caixa pra classificar entradas e saídas e montar a DRE resumida automaticamente. Nas saídas, informe também a <strong>natureza</strong> (fixo ou variável) e <strong>onde é aplicada</strong> (produção, vendas ou administração): é isso que alimenta a página Precificação.</p>
+    <div class="barra-modulo">
+      <button class="btn-novo" id="btnNovaCategoriaFinanceira">+ Nova categoria</button>
+    </div>
+    <div class="cartao-item relatorio-cadastro">
+      <div class="tabela-container">
+        <table class="tabela-movimentacoes tabela-cadastro">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Tipo</th>
+              <th>Grupo do DRE · custeio</th>
+              <th>Editar</th>
+              <th>Excluir</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaCategoriasFinanceiras"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:26px 0 10px;">Impressão de comanda</h3>
+    <p style="font-size:0.82rem; color:var(--marrom-cafe); margin-top:-4px;">Controla o cabeçalho, o rodapé e o tamanho do papel usados ao imprimir a comanda de um pedido em Vendas.</p>
+    <div class="cartao-item">
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoNomeLojaImpressao">Nome da loja</label>
+          <input type="text" id="campoNomeLojaImpressao" placeholder="Bakeria Confeitaria Artesanal">
+        </div>
+        <div class="form-grupo">
+          <label for="campoTelefoneLojaImpressao">Telefone</label>
+          <input type="text" id="campoTelefoneLojaImpressao" placeholder="(00) 00000-0000">
+        </div>
+      </div>
+      <div class="form-grupo">
+        <label for="campoEnderecoLojaImpressao">Endereço</label>
+        <input type="text" id="campoEnderecoLojaImpressao" placeholder="Rua, número, bairro, cidade">
+      </div>
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoCnpjLojaImpressao">CNPJ (opcional)</label>
+          <input type="text" id="campoCnpjLojaImpressao" placeholder="00.000.000/0001-00">
+        </div>
+        <div class="form-grupo">
+          <label for="campoLarguraPapelImpressao">Tamanho do papel</label>
+          <select id="campoLarguraPapelImpressao">
+            <option value="58mm">58mm (térmica pequena)</option>
+            <option value="80mm">80mm (térmica padrão)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grupo">
+        <label for="campoMensagemRodapeImpressao">Mensagem de rodapé (opcional)</label>
+        <textarea id="campoMensagemRodapeImpressao" rows="3" placeholder="Ex.: Junte 10 carimbos e troque por um item grátis na próxima compra!" style="width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--marrom-claro); font-family:inherit; font-size:0.92rem; resize:vertical;"></textarea>
+      </div>
+      <label class="form-checkbox">
+        <input type="checkbox" id="campoAvisoNaoFiscalImpressao" checked>
+        Mostrar aviso "NÃO É DOCUMENTO FISCAL" no topo da comanda
+      </label>
+      <button type="button" class="btn-primario" id="btnSalvarConfigImpressao" style="margin-top:14px;">Salvar</button>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<!-- MODAL genérico de criar/editar, preenchido dinamicamente pelo JS -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitulo">Novo registro</h3>
+    <form id="modalForm">
+      <div id="modalCampos"></div>
+      <div class="acoes-modal">
+        <button type="button" class="btn-secundario" id="btnCancelarModal">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarModal">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL de Produto (próprio: SKU, valor, estoque mín./máx., ativo e composição) -->
+<div class="modal-overlay" id="modalProdutoOverlay">
+  <div class="modal">
+    <h3 id="tituloModalProduto">Novo produto</h3>
+    <form id="formProduto">
+      <div class="form-grupo">
+        <label for="campoNomeProduto">Nome</label>
+        <input type="text" id="campoNomeProduto" required>
+      </div>
+
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoSkuProduto">SKU (opcional)</label>
+          <input type="text" id="campoSkuProduto">
+        </div>
+        <div class="form-grupo">
+          <label for="campoValorProduto">Valor de venda (R$)</label>
+          <input type="number" id="campoValorProduto" step="0.01" min="0.01" required>
+        </div>
+      </div>
+
+      <div class="form-grupo">
+        <label for="campoCategoriaProduto">Categoria</label>
+        <input type="text" id="campoCategoriaProduto" placeholder="Tradicionais, Cookie Pies...">
+      </div>
+
+      <div class="form-linha-dupla">
+        <div class="form-grupo">
+          <label for="campoEstoqueMinimoProduto">Estoque mínimo</label>
+          <input type="number" id="campoEstoqueMinimoProduto" step="0.01" min="0">
+        </div>
+        <div class="form-grupo">
+          <label for="campoEstoqueMaximoProduto">Estoque máximo (opcional)</label>
+          <input type="number" id="campoEstoqueMaximoProduto" step="0.01" min="0">
+        </div>
+      </div>
+
+      <label class="form-checkbox">
+        <input type="checkbox" id="campoAtivoProduto" checked>
+        Ativo
+      </label>
+
+      <div class="compra-secao-titulo">Composição</div>
+      <p class="item-sub" style="margin:-4px 0 10px;">O que 1 unidade deste produto consome — fichas técnicas e/ou insumos direto.</p>
+      <div id="itensComposicaoProduto"></div>
+      <button type="button" class="btn-secundario btn-add-item" id="btnAdicionarItemComposicaoProduto">+ Adicionar item</button>
+
+      <div class="compra-rodape-frete" style="margin:16px -24px -26px; padding:14px 24px;">
+        <div class="compra-frete-linha"><span>Custo unitário de produto:</span><span id="custoUnitarioProdutoModal">—</span></div>
+      </div>
+
+      <div class="acoes-modal" style="margin-top:32px;">
+        <button type="button" class="btn-secundario" id="btnCancelarProduto">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarProduto">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL de Insumo (próprio: nome, unidade, custo, estoque mínimo — pill sem rótulo, igual Fornecedores) -->
+<div class="modal-overlay" id="modalInsumoOverlay">
+  <div class="modal">
+    <h3 id="tituloModalInsumo">Novo insumo</h3>
+    <form id="formInsumo">
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoNomeInsumo" placeholder="Nome do insumo *" required>
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoUnidadeInsumo" placeholder="Unidade de medida * (kg, un, litro...)" required>
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoCustoInsumo" step="0.0001" min="0" placeholder="Custo unitário (R$) — até 4 casas decimais">
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoEstoqueMinimoInsumo" step="0.01" min="0" placeholder="Estoque mínimo">
+      </div>
+      <div class="acoes-modal">
+        <button type="button" class="btn-secundario" id="btnCancelarInsumo">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarInsumo">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL de Embalagem (próprio: nome, dimensões, estoque mínimo, custo — pill sem rótulo) -->
+<div class="modal-overlay" id="modalEmbalagemOverlay">
+  <div class="modal">
+    <h3 id="tituloModalEmbalagem">Nova embalagem</h3>
+    <form id="formEmbalagem">
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoNomeEmbalagem" placeholder="Nome da embalagem *" required>
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="text" id="campoDimensoesEmbalagem" placeholder="Dimensões (ex.: 20x20x10cm)">
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoEstoqueMinimoEmbalagem" step="0.01" min="0" placeholder="Estoque mínimo">
+      </div>
+      <div class="form-grupo form-grupo-pill">
+        <input type="number" id="campoCustoEmbalagem" step="0.0001" min="0" placeholder="Custo unitário (R$)">
+      </div>
+      <div class="acoes-modal">
+        <button type="button" class="btn-secundario" id="btnCancelarEmbalagem">Cancelar</button>
+        <button type="submit" class="btn-primario" id="btnSalvarEmbalagem">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL de Detalhes do pedido (só leitura, sem form — abre pra qualquer status) -->
+<div class="modal-overlay" id="modalDetalhesVendaOverlay">
+  <div class="modal">
+    <h3 id="tituloDetalhesVenda">Detalhes do pedido</h3>
+    <div id="detalhesVendaConteudo"></div>
+    <div class="acoes-modal">
+      <button type="button" class="btn-secundario" id="btnImprimirComandaDetalhes" style="width:100%;">Imprimir comanda</button>
+      <button type="button" class="btn-primario" id="btnFecharDetalhesVenda" style="width:100%;">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="core.js"></script>
+<script src="cadastros.js"></script>
+<script src="dashboard.js"></script>
+<script src="estoque.js"></script>
+<script src="compras.js"></script>
+<script src="fichas.js"></script>
+<script src="produtos.js"></script>
+<script src="insumos.js"></script>
+<script src="embalagens.js"></script>
+<script src="clientes.js"></script>
+<script src="producao.js"></script>
+<script src="vendas.js"></script>
+<script src="caixa.js"></script>
+<script src="configuracoes.js"></script>
+<script src="dre.js"></script>
+<script src="precificacao.js"></script>
+<script src="init.js"></script>
+</body>
+</html>

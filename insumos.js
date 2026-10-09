@@ -74,7 +74,7 @@ function renderizarTabelaInsumos(){
   corpo.innerHTML = insumos.map(insumo => `
     <tr>
       <td class="celula-principal">${esc(insumo.nome)}</td>
-      <td>${relacionadosInsumoHtml(insumo)}</td>
+      <td class="celula-relacionados">${relacionadosInsumoHtml(insumo)}</td>
       <td>${esc(insumo.unidade_medida)}</td>
       <td>${moedaInsumo(insumo.custo_unitario || 0)}</td>
       <td>${insumo.estoque_minimo != null ? Number(insumo.estoque_minimo).toLocaleString('pt-BR') : '—'}</td>

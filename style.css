@@ -1377,3 +1377,22 @@ h1, h2, h3, .fonte-titulo{
 @media (max-width: 760px){
   .tabela-insumos{ min-width: 720px; } /* em celular volta a rolar de lado, em vez de espremer tudo */
 }
+
+
+/* ---------------------------------------------------------
+   FLUXO DE CAIXA (Controle de caixa) — demonstração em formato de planilha
+--------------------------------------------------------- */
+.fluxo-tabela{ min-width: 0; font-variant-numeric: tabular-nums; }
+.fluxo-tabela th{ white-space: normal; }
+.fluxo-tabela .fluxo-num{ text-align: right; white-space: nowrap; width: 140px; }
+.fluxo-tabela td{ padding: 8px 14px; white-space: normal; }
+.fluxo-neg{ color: var(--vermelho); }
+.fluxo-secao td{ background: var(--bege-claro); color: var(--marrom-cafe); font-weight: 800; font-size: 0.75rem; letter-spacing: 0.04em; padding-top: 12px; }
+.fluxo-grupo td{ font-weight: 700; border-top: 1px solid var(--bege); }
+.fluxo-grupo td:first-child{ padding-left: 24px; }
+.fluxo-cat td{ color: var(--marrom-escuro); border-top: 1px dotted var(--bege); cursor: pointer; }
+.fluxo-cat td:first-child{ padding-left: 48px; }
+.fluxo-cat:hover td{ background: var(--bege-claro); }
+.fluxo-qtd{ color: var(--marrom-cafe); font-size: 0.7rem; font-weight: 500; margin-left: 6px; }
+.fluxo-saldo td, .fluxo-total td{ font-weight: 700; background: var(--bege-claro); border-top: 1px solid var(--bege-escuro); }
+.fluxo-final td{ font-weight: 800; font-size: 0.95rem; background: var(--bege-escuro); border-top: 2px solid var(--marrom-claro); }

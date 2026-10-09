@@ -163,10 +163,10 @@ async function carregarCaixa(){
 
   const containerResumo = document.getElementById('resumoCaixa');
   const corpo = document.getElementById('corpoTabelaCaixa');
-  containerResumo.innerHTML = '<div class="lista-vazia">Carregando...</div>';
+  containerResumo.innerHTML = '<tr><td colspan="3" class="lista-vazia">Carregando...</td></tr>';
   corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Carregando...</td></tr>';
 
-  const [respLancamentos, respCategorias] = await Promise.all([
+  const [respLancamentos, respCategorias, respAnteriores] = await Promise.all([
     supabaseClient
       .from('lancamentos_financeiros')
       .select('*, categorias_financeiras(nome, grupo_dre)')
@@ -175,10 +175,11 @@ async function carregarCaixa(){
       .order('data', { ascending: false })
       .order('criado_em', { ascending: false }),
     supabaseClient.from('categorias_financeiras').select('*').eq('ativo', true).order('nome'),
+    buscarLancamentosAnterioresCaixa(primeiroDia),
   ]);
 
-  if (respLancamentos.error){
-    containerResumo.innerHTML = '<div class="lista-vazia">Não foi possível carregar o controle de caixa.</div>';
+  if (respLancamentos.error || respAnteriores.error){
+    containerResumo.innerHTML = '<tr><td colspan="3" class="lista-vazia">Não foi possível carregar o fluxo de caixa.</td></tr>';
     corpo.innerHTML = '<tr><td colspan="6" class="lista-vazia">Não foi possível carregar os lançamentos. Se ainda não rodou, execute o SQL <strong>migracao-categorias-financeiras.sql</strong> no Supabase.</td></tr>';
     mostrarToast('Erro ao carregar o controle de caixa.', 'erro');
     return;
@@ -188,31 +189,99 @@ async function carregarCaixa(){
   dadosCarregados.lancamentosCaixa = data;
   categoriasFinanceirasAtivas = respCategorias.data || [];
 
-  const totalEntradas = data.filter(l => l.tipo === 'entrada').reduce((s, l) => s + Number(l.valor), 0);
-  const totalSaidas = data.filter(l => l.tipo === 'saida').reduce((s, l) => s + Number(l.valor), 0);
-  const saldo = totalEntradas - totalSaidas;
-  const formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  containerResumo.innerHTML = `
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Entrada</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:var(--verde);">${formatarMoeda(totalEntradas)}</span></div>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Saída</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:var(--vermelho);">${formatarMoeda(totalSaidas)}</span></div>
-    </div>
-    <div class="cartao-item">
-      <div class="titulo-item"><span>Saldo do mês (caixa)</span></div>
-      <div class="linha-info" style="font-size:1.3rem; font-weight:700;"><span></span><span style="color:${saldo >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(saldo)}</span></div>
-      <div class="item-sub">Fluxo de caixa: vendas recebidas (com frete) menos taxa de maquininha, compras recebidas e despesas lançadas. O lucro por competência está em Financeiro → Relatório DRE.</div>
-    </div>
-  `;
-
-  renderizarResumosPorGrupo(data);
+  const saldoInicial = respAnteriores.data.reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
+  renderizarFluxoCaixa(data, saldoInicial, mesAno);
 
   montarOpcoesFiltroCategoriaCaixa(data);
   renderizarTabelaCaixa();
+}
+
+// --------------------------------------------------------
+// FLUXO DE CAIXA (método direto, em formato de demonstração):
+//   Saldo inicial + Entradas − Saídas = Saldo final
+// O saldo inicial é a soma de todos os lançamentos anteriores ao mês
+// (não é conciliado com o extrato do banco). Entradas e saídas são
+// agrupadas pelo grupo do DRE da categoria e, dentro dele, por categoria.
+// Saídas aparecem entre parênteses, como nas planilhas contábeis.
+// --------------------------------------------------------
+async function buscarLancamentosAnterioresCaixa(primeiroDia){
+  const todos = [];
+  for (let inicio = 0; ; inicio += 1000){
+    const { data, error } = await supabaseClient.from('lancamentos_financeiros')
+      .select('tipo, valor').lt('data', primeiroDia).order('data').order('id').range(inicio, inicio + 999);
+    if (error) return { error };
+    todos.push(...data);
+    if (data.length < 1000) break;
+  }
+  return { data: todos };
+}
+
+function montarSecaoFluxoCaixa(lancamentos, tipo){
+  const grupos = {};
+  lancamentos.filter(l => l.tipo === tipo).forEach(l => {
+    const codigo = grupoDoLancamento(l) || '__sem';
+    const g = grupos[codigo] = grupos[codigo] || { codigo, total: 0, cats: {} };
+    const nome = l.categorias_financeiras ? l.categorias_financeiras.nome : (l.categoria ? capitalizar(l.categoria) : 'Sem categoria');
+    const chave = chaveCategoriaCaixa(l);
+    const c = g.cats[chave + '|' + nome] = g.cats[chave + '|' + nome] || { chave, nome, total: 0, qtd: 0 };
+    c.total += Number(l.valor); c.qtd++; g.total += Number(l.valor);
+  });
+  const ordem = codigo => { const i = GRUPOS_DRE.findIndex(x => x.codigo === codigo); return i < 0 ? 99 : i; };
+  const lista = Object.values(grupos).sort((a, b) => ordem(a.codigo) - ordem(b.codigo));
+  lista.forEach(g => { g.catsOrdenadas = Object.values(g.cats).sort((a, b) => b.total - a.total); });
+  return { grupos: lista, total: lista.reduce((s, g) => s + g.total, 0) };
+}
+
+function renderizarFluxoCaixa(lancamentos, saldoInicial, mesAno){
+  const [ano, mes] = mesAno.split('-').map(Number);
+  const nomeMes = new Date(ano, mes - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const m = v => Math.abs(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const pos = v => (v < -0.005 ? `<span class="fluxo-neg">(${m(v)})</span>` : m(v));   // positivo normal, negativo entre parênteses
+  const neg = v => (v > 0.005 ? `<span class="fluxo-neg">(${m(v)})</span>` : m(0));    // saídas sempre entre parênteses
+  const pct = (parte, todo) => (todo > 0.005 ? (parte / todo * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '');
+
+  const ent = montarSecaoFluxoCaixa(lancamentos, 'entrada');
+  const sai = montarSecaoFluxoCaixa(lancamentos, 'saida');
+  const variacao = ent.total - sai.total;
+  const saldoFinal = saldoInicial + variacao;
+
+  document.getElementById('cabecalhoFluxoCaixa').innerHTML = `
+    <tr><th>Fluxo de caixa — ${nomeMes}</th><th class="fluxo-num">R$</th><th class="fluxo-num">% da seção</th></tr>`;
+
+  const secao = (titulo, s, formatar, classe) => {
+    if (!s.grupos.length) return `<tr class="fluxo-secao"><td colspan="3">${titulo}</td></tr><tr><td colspan="3" class="item-sub" style="padding-left:28px;">Nenhum lançamento no período.</td></tr>`;
+    const linhas = s.grupos.map(g => {
+      const rotulo = g.codigo === '__sem' ? '⚠ Sem grupo (categoria não definida)' : rotuloGrupoDre(g.codigo);
+      return `
+        <tr class="fluxo-grupo"><td>${esc(rotulo)}</td><td class="fluxo-num">${formatar(g.total)}</td><td class="fluxo-num">${pct(g.total, s.total)}</td></tr>
+        ${g.catsOrdenadas.map(c => `
+          <tr class="fluxo-cat" data-filtrar-categoria="${esc(c.chave)}" title="Filtrar lançamentos desta categoria">
+            <td>${esc(c.nome)} <span class="fluxo-qtd">${c.qtd} lanç.</span></td>
+            <td class="fluxo-num">${formatar(c.total)}</td>
+            <td class="fluxo-num">${pct(c.total, s.total)}</td>
+          </tr>`).join('')}`;
+    }).join('');
+    return `<tr class="fluxo-secao"><td colspan="3">${titulo}</td></tr>${linhas}`;
+  };
+
+  document.getElementById('resumoCaixa').innerHTML = `
+    <tr class="fluxo-saldo"><td>(=) Saldo inicial do período</td><td class="fluxo-num">${pos(saldoInicial)}</td><td></td></tr>
+    ${secao('(+) ENTRADAS', ent, v => m(v))}
+    <tr class="fluxo-total"><td>(=) Total de entradas</td><td class="fluxo-num" style="color:var(--verde);">${m(ent.total)}</td><td></td></tr>
+    ${secao('(−) SAÍDAS', sai, neg)}
+    <tr class="fluxo-total"><td>(=) Total de saídas</td><td class="fluxo-num">${neg(sai.total)}</td><td></td></tr>
+    <tr class="fluxo-total"><td>(=) Variação líquida do caixa no período <span class="fluxo-qtd">entradas − saídas</span></td><td class="fluxo-num">${pos(variacao)}</td><td></td></tr>
+    <tr class="fluxo-final"><td>(=) Saldo final do período</td><td class="fluxo-num">${pos(saldoFinal)}</td><td></td></tr>
+    <tr><td colspan="3" class="item-sub" style="white-space:normal;">O saldo inicial é a soma de todos os lançamentos anteriores a este mês, não um saldo conciliado com o banco. Se ele não bater com o dinheiro real, falta lançar algum valor antigo (ex.: saldo de abertura).</td></tr>`;
+
+  document.querySelectorAll('#resumoCaixa [data-filtrar-categoria]').forEach(linha => {
+    linha.addEventListener('click', () => {
+      const select = document.getElementById('filtroCategoriaCaixa');
+      select.value = linha.dataset.filtrarCategoria;
+      renderizarTabelaCaixa();
+      select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
 }
 
 // --------------------------------------------------------
@@ -448,7 +517,7 @@ function abrirModalAlterarCategoriaLancamento(id){
       </select>
       <div class="item-sub" id="avisoNovaCategoriaLancamento" style="margin-top:6px;"></div>
     </div>
-    ${automatico ? '<div class="item-sub" style="white-space:normal;">Lançamento automático: a DRE e a Precificação já tratam vendas, compras e taxas pelos próprios pedidos e compras, então trocar a categoria aqui só muda o Resumo por grupo do caixa.</div>' : ''}
+    ${automatico ? '<div class="item-sub" style="white-space:normal;">Lançamento automático: a DRE e a Precificação já tratam vendas, compras e taxas pelos próprios pedidos e compras, então trocar a categoria aqui só muda o agrupamento no Fluxo de caixa.</div>' : ''}
   `;
 
   const select = document.getElementById('campoNovaCategoriaLancamento');

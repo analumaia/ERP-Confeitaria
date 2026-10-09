@@ -404,23 +404,32 @@
 
   <!-- CONTROLE DE CAIXA -->
   <section class="conteudo-modulo" data-modulo="caixa">
-    <div class="barra-modulo"><h2>Controle de caixa</h2></div>
-
-    <div class="lista-cards" id="resumoCaixa" style="margin-bottom:16px;"></div>
-
-    <div class="item-sub" style="white-space:normal; margin-bottom:16px;">O resultado por competência (lucro, CMV, margens) fica em <strong>Financeiro → Relatório DRE</strong>. Aqui você vê só o dinheiro que entrou e saiu.</div>
-
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Resumo por grupo</h3>
-    <div class="lista-cards" id="gradeResumosCaixa" style="margin-bottom:20px;"></div>
-
     <div class="barra-modulo">
-      <div style="display:flex; align-items:center; gap:10px; flex:1;">
+      <h2>Controle de caixa</h2>
+      <div style="display:flex; align-items:center; gap:10px; flex:1; justify-content:center;">
         <label for="filtroPeriodoCaixa" class="item-sub" style="white-space:nowrap;">Período:</label>
         <input type="month" id="filtroPeriodoCaixa" class="campo-busca" style="max-width:200px;">
+      </div>
+      <button class="btn-novo" id="btnNovoLancamento">+ Lançamento manual</button>
+    </div>
+
+    <!-- Demonstração do fluxo de caixa (montada por caixa.js) -->
+    <div class="cartao-item relatorio-cadastro" style="margin-bottom:8px;">
+      <div class="tabela-container" style="box-shadow:none;">
+        <table class="tabela-movimentacoes fluxo-tabela">
+          <thead id="cabecalhoFluxoCaixa"></thead>
+          <tbody id="resumoCaixa"><tr><td colspan="3" class="lista-vazia">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="item-sub" style="white-space:normal; margin:0 2px 22px;">Regime de caixa: conta o dinheiro que entrou e saiu, na data do lançamento. O lucro por competência (CMV, margens) está em <strong>Financeiro → Relatório DRE</strong>. Clique numa categoria para filtrar os lançamentos abaixo.</div>
+
+    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:10px 0;">Lançamentos</h3>
+    <div class="barra-modulo" style="margin-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:10px; flex:1;">
         <label for="filtroCategoriaCaixa" class="item-sub" style="white-space:nowrap;">Categoria:</label>
         <select id="filtroCategoriaCaixa" class="campo-busca" style="max-width:260px;"><option value="">Todas as categorias</option></select>
       </div>
-      <button class="btn-novo" id="btnNovoLancamento">+ Lançamento manual</button>
     </div>
 
     <div class="item-sub" id="resumoFiltroCaixa" style="white-space:normal; margin:0 2px 10px;"></div>

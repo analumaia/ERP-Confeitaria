@@ -1113,7 +1113,8 @@ h1, h2, h3, .fonte-titulo{
 }
 
 .ficha-card{ padding: 0; gap: 0; overflow: hidden; }
-.ficha-card-corpo{ padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.ficha-card-corpo{ padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; }  /* ocupa a altura que sobra: os botões ficam sempre colados na base do card */
+.ficha-card-acoes{ margin-top: auto; }
 .ficha-produtos{ margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
 .tag-produto{
   display: inline-block;

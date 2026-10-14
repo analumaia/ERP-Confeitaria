@@ -132,17 +132,59 @@ function montarAbas(){
     </button>
   `;
 
-  nav.innerHTML = '<div class="menu-titulo">MENU</div>' + MENU_LATERAL.map(grupo =>
-    botaoMenu(grupo.chave, false) + (grupo.filhos || []).map(f => botaoMenu(f, true)).join('')
-  ).join('');
+  // menu no cabeçalho: grupos com subpáginas viram um menu suspenso dentro da página principal
+  nav.innerHTML = '<div class="menu-titulo">MENU</div>' + MENU_LATERAL.map(grupo => {
+    const filhos = grupo.filhos || [];
+    if (!filhos.length) return `<div class="menu-grupo">${botaoMenu(grupo.chave, false)}</div>`;
+    return `
+      <div class="menu-grupo tem-filhos" data-grupo="${grupo.chave}">
+        <div class="menu-grupo-topo">
+          ${botaoMenu(grupo.chave, false)}
+          <button type="button" class="seta" data-alternar-grupo="${grupo.chave}" aria-label="Mostrar páginas de ${TITULOS_ABA[grupo.chave]}" aria-expanded="false">▾</button>
+        </div>
+        <div class="submenu"><div class="submenu-lista">${filhos.map(f => botaoMenu(f, true)).join('')}</div></div>
+      </div>`;
+  }).join('');
 
   nav.querySelectorAll('[data-aba]').forEach(botao => {
     botao.addEventListener('click', () => trocarAba(botao.dataset.aba));
   });
+
+  nav.querySelectorAll('[data-alternar-grupo]').forEach(seta => {
+    seta.addEventListener('click', e => {
+      e.stopPropagation();
+      const grupo = seta.closest('.menu-grupo');
+      const abrir = !grupo.classList.contains('aberto');
+      fecharSubmenus();
+      grupo.classList.toggle('aberto', abrir);
+      seta.setAttribute('aria-expanded', String(abrir));
+    });
+  });
+  marcarGrupoAtivo();
 }
 
+function fecharSubmenus(){
+  document.querySelectorAll('#abasModulos .menu-grupo.aberto').forEach(g => {
+    g.classList.remove('aberto');
+    const seta = g.querySelector('.seta');
+    if (seta) seta.setAttribute('aria-expanded', 'false');
+  });
+}
+
+// destaca o grupo (página principal) quando uma das subpáginas está aberta
+function marcarGrupoAtivo(){
+  document.querySelectorAll('#abasModulos .menu-grupo[data-grupo]').forEach(g => {
+    const grupo = MENU_LATERAL.find(m => m.chave === g.dataset.grupo);
+    g.classList.toggle('grupo-ativo', !!grupo && (grupo.filhos || []).includes(moduloAtivo));
+  });
+}
+
+// clicar fora (ou apertar Esc) fecha os menus suspensos
+document.addEventListener('click', e => { if (!e.target.closest || !e.target.closest('.menu-grupo')) fecharSubmenus(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharSubmenus(); });
+
 // Menu lateral em telas pequenas (vira gaveta, aberta pelo botão ☰ do cabeçalho)
-const menuLateral = document.getElementById('menuLateral');
+const menuLateral = document.getElementById('abasModulos'); // no celular/tablet estreito vira gaveta
 const menuFundo = document.getElementById('menuFundo');
 const btnMenu = document.getElementById('btnMenu');
 
@@ -158,6 +200,8 @@ menuFundo.addEventListener('click', () => alternarMenuLateral(false));
 function trocarAba(chave){
   moduloAtivo = chave;
   alternarMenuLateral(false);
+  fecharSubmenus();
+  marcarGrupoAtivo();
   window.scrollTo({ top: 0 });
   document.querySelectorAll('.aba-modulo').forEach(b => {
     b.classList.toggle('ativa', b.dataset.aba === chave);

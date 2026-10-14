@@ -1460,13 +1460,39 @@ h1, h2, h3, .fonte-titulo{
 .kpi-input input:focus{ border-color: var(--rosa); outline: none; }
 .kpi-input{ margin: 4px 0; }
 
-.custeio-tabela{ min-width: 0; width: 100%; font-size: 0.76rem; }
-.custeio-tabela th, .custeio-tabela td{ padding-left: 4px; padding-right: 4px; }
-.custeio-tabela td.celula-principal{ font-weight: 700; min-width: 90px; }
+.custeio-tabela{ min-width: 0; width: 100%; font-size: 0.82rem; border-collapse: separate; border-spacing: 0; }
+.custeio-tabela th, .custeio-tabela td{ padding: 12px 8px; border-bottom: 1px solid var(--bege-escuro); }
+.custeio-tabela thead th{ padding-top: 14px; padding-bottom: 14px; }
+.custeio-tabela thead tr.grupos th{ padding: 10px 8px; letter-spacing: 0.06em; }
+.custeio-tabela tbody tr:nth-child(even) td{ background: rgba(245, 237, 222, 0.38); }
+.custeio-tabela tbody tr:hover td{ background: var(--bege); }
+.custeio-tabela tbody tr:last-child td{ border-bottom: none; }
+.custeio-tabela td.celula-principal{ display: table-cell; font-weight: 700; min-width: 110px; }
 .custeio-tabela td.negativo{ color: var(--vermelho); }
-.custeio-tabela input[type="number"]{ width: 58px; padding: 5px 6px; text-align: center; }
-.custeio-tabela tfoot td{ font-weight: 700; background: var(--bege); border-top: 2px solid var(--bege-escuro); }
+.custeio-tabela input[type="number"]{ width: 62px; padding: 7px 6px; text-align: center; }
+.custeio-tabela tfoot td{ font-weight: 700; background: var(--bege); border-top: 2px solid var(--bege-escuro); border-bottom: none; padding-top: 14px; padding-bottom: 14px; }
 .custeio-tabela th small{ display: block; font-weight: 500; }
+.custeio-tabela th:first-child, .custeio-tabela td:first-child{ min-width: 0; white-space: nowrap; padding-left: 18px; }
+.custeio-tabela th:last-child, .custeio-tabela td:last-child{ padding-right: 18px; }
+.custeio-tabela td{ white-space: nowrap; }
+.custeio-tabela td.celula-principal{ white-space: normal; }
+.custeio-tabela td small{ white-space: nowrap; max-width: none; margin-left: auto; line-height: 1.3; margin-top: 2px; }
+
+/* células comparadas: vermelho = preço atual abaixo do calculado; verde = cobre */
+.custeio-tabela td.preco-calc{ font-weight: 700; }
+.custeio-tabela td.preco-calc strong{ display: block; font-weight: 800; }
+.custeio-tabela td.preco-calc.baixo, .custeio-tabela td.cel-baixo{ background: var(--vermelho-bg) !important; color: var(--vermelho); }
+.custeio-tabela td.preco-calc.ok, .custeio-tabela td.cel-ok{ background: var(--verde-bg) !important; color: var(--verde); }
+.custeio-tabela td.preco-calc small, .custeio-tabela td.cel-baixo small, .custeio-tabela td.cel-ok small{ color: inherit; font-weight: 600; opacity: 0.9; }
+
+.legenda-cores{ margin: 18px 0 14px; font-size: 0.82rem; line-height: 2; color: var(--marrom-cafe); }
+.legenda-cores .chip-cor{ margin-right: 6px; }
+.legenda-cores .chip-cor + .chip-cor, .legenda-cores strong + .chip-cor{ margin-left: 12px; }
+.chip-cor{ display: inline-block; padding: 3px 12px; border-radius: 999px; font-weight: 700; font-size: 0.74rem; }
+.chip-cor.baixo{ background: var(--vermelho-bg); color: var(--vermelho); }
+.chip-cor.ok{ background: var(--verde-bg); color: var(--verde); }
+
+.relatorio-produtos .tabela-container:has(.custeio-tabela){ border-radius: 16px; }
 
 .canais-card{ margin-bottom: 16px; }
 .canal-linha{ display: grid; grid-template-columns: minmax(150px, 1.4fr) 110px 150px 36px; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -1482,11 +1508,7 @@ h1, h2, h3, .fonte-titulo{
   .canal-linha{ grid-template-columns: 1fr 90px 36px; }
   .canal-linha .canal-check{ grid-column: 1 / 3; }
 }
-.custeio-tabela th:first-child, .custeio-tabela td:first-child{ min-width: 0; white-space: nowrap; padding-left: 12px; }
 
 .canal-imposto{ display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; margin-bottom: 14px; }
 .canal-imposto input{ width: 100%; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--marrom-claro); background: var(--branco); color: var(--marrom-escuro); font-family: inherit; font-size: 0.85rem; }
 @media (max-width: 640px){ .canal-imposto{ grid-template-columns: 90px 1fr; } }
-.custeio-tabela td small{ white-space: normal; max-width: 84px; margin-left: auto; line-height: 1.25; }
-.custeio-tabela td{ white-space: nowrap; }
-.custeio-tabela td.celula-principal{ white-space: normal; }

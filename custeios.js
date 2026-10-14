@@ -121,6 +121,15 @@ function tabelaCusteio(cabecalhos, linhas, rodape, vazio){
     </div>`;
 }
 
+// célula de preço calculado comparada com o preço atual: vermelho = o preço atual está abaixo (precisa subir), verde = cobre
+function celulaComparada(calculado, atual){
+  if (calculado === null || calculado === undefined || !isFinite(calculado)) return '<td class="preco-calc">—</td>';
+  if (!(atual > 0)) return `<td class="preco-calc"><strong>${moedaPrecif(calculado)}</strong></td>`;
+  const diff = calculado - atual;
+  const baixo = diff > 0.005;
+  return `<td class="preco-calc ${baixo ? 'baixo' : 'ok'}"><strong>${moedaPrecif(calculado)}</strong><small>${baixo ? 'subir ' + moedaPrecif(diff) : 'folga ' + moedaPrecif(-diff)}</small></td>`;
+}
+
 const celulaProduto = p => `<td class="alinha-esq celula-principal">${esc(p.nome)}</td>`;
 const celulaCodigo = p => `<td class="alinha-esq">${p.sku ? esc(p.sku) : '—'}</td>`;
 const celulaQtd = (p, base) => `<td>${entradaCusteio('qtd', p.id, base.qtd[p.id], `aria-label="Quantidade desejada de ${esc(p.nome)}" placeholder="0"`)}</td>`;
@@ -193,8 +202,8 @@ function montarCusteioVariavel(base){
       <td>${moedaPrecif(d.despesas)}</td>
       <td class="num-forte">${moedaPrecif(d.custosTotais)}</td>
       <td>${moedaPrecifFina(d.custoUnit)}</td>
-      <td class="num-forte ${d.lucroBruto < 0 ? 'negativo' : ''}">${moedaPrecif(d.lucroBruto)}</td>
-      <td class="num-forte">${moedaPrecif(d.p.precoAtual)}<small>piso ${moedaPrecif(d.p.piso)}</small></td>
+      <td class="num-forte ${d.lucroBruto < 0 ? 'cel-baixo' : 'cel-ok'}">${moedaPrecif(d.lucroBruto)}</td>
+      <td class="num-forte ${d.p.piso !== null && d.p.precoAtual > 0 ? (d.p.precoAtual < d.p.piso - 0.005 ? 'cel-baixo' : 'cel-ok') : ''}">${moedaPrecif(d.p.precoAtual)}<small>piso ${moedaPrecif(d.p.piso)}</small></td>
       <td>${d.pe !== null ? cNum(d.pe) : '—'}</td>
       <td class="num-forte ${d.mc !== null && d.mc < 0 ? 'negativo' : ''}">${moedaPrecifFina(d.mc)}<small>${pctPrecif(d.mcPct)}</small></td>
     </tr>`);
@@ -270,9 +279,9 @@ function montarCusteioAbsorcao(base){
       <td>${moedaPrecifFina(d.despesas)}</td>
       <td class="num-forte">${moedaPrecifFina(d.custos)}</td>
       <td class="num-forte">${moedaPrecif(d.p.precoAtual)}</td>
-      <td class="num-forte ${d.lucroBruto !== null && d.lucroBruto < 0 ? 'negativo' : ''}">${moedaPrecifFina(d.lucroBruto)}</td>
+      <td class="num-forte ${d.lucroBruto === null ? '' : d.lucroBruto < 0 ? 'cel-baixo' : 'cel-ok'}">${moedaPrecifFina(d.lucroBruto)}</td>
       <td>${pctPrecif(d.margem)}</td>
-      <td class="${d.liquido !== null && d.liquido < 0 ? 'negativo' : ''}">${moedaPrecifFina(d.liquido)}</td>
+      <td class="${d.liquido === null ? '' : d.liquido < 0 ? 'cel-baixo' : 'cel-ok'}">${moedaPrecifFina(d.liquido)}</td>
     </tr>`);
 
   const rodape = `
@@ -377,10 +386,10 @@ function montarCusteioPleno(base){
       <td>${moedaPrecifFina(k.despesasFixasPorUnidade)}</td>
       <td>${moedaPrecifFina(d.financeiras)}</td>
       <td class="num-forte">${moedaPrecifFina(d.custo)}</td>
-      <td class="num-forte">${moedaPrecif(d.custoLucro)}</td>
-      <td class="num-forte">${moedaPrecif(d.custoIR)}</td>
-      ${nCanais ? d.precosCanal.map(v => `<td class="num-forte">${moedaPrecif(v)}</td>`).join('') : '<td>—</td>'}
-      <td>${moedaPrecif(d.p.precoAtual)}<small>${ref !== null && d.p.precoAtual > 0 ? (d.p.precoAtual >= ref - 0.005 ? 'cobre o calculado' : pctPrecif((ref / d.p.precoAtual - 1) * 100) + ' abaixo do calculado') : ''}</small></td>
+      ${celulaComparada(d.custoLucro, d.p.precoAtual)}
+      ${celulaComparada(d.custoIR, d.p.precoAtual)}
+      ${nCanais ? d.precosCanal.map(v => celulaComparada(v, d.p.precoAtual)).join('') : '<td>—</td>'}
+      <td class="num-forte">${moedaPrecif(d.p.precoAtual)}</td>
       <td>${entradaCusteio('mercado', d.p.id, mercado, `placeholder="—" aria-label="Preço de mercado de ${esc(d.p.nome)}"`)}
         ${mercado && ref ? `<small>${mercado >= ref ? 'mercado cobre' : 'calculado ' + pctPrecif((ref / mercado - 1) * 100) + ' acima'}</small>` : ''}</td>
     </tr>`;
@@ -388,7 +397,13 @@ function montarCusteioPleno(base){
 
   const explicacao = `<strong>Custeio pleno:</strong> custo de produção + despesas fixas de venda e administração (inclui o DAS do MEI) rateadas por unidade, depois o <em>lucro desejado</em> de cada produto, o imposto e a taxa de cada canal viram % do preço.`;
 
-  return cabecalhoCusteio(base, 'pleno', explicacao) + editorCanais + cards +
+  const legendaCores = `
+    <div class="legenda-cores">
+      <span class="chip-cor baixo">Vermelho</span>preço atual <strong>abaixo</strong> do calculado: precisa subir (mostra quanto).
+      <span class="chip-cor ok">Verde</span>preço atual já <strong>cobre</strong> o calculado (mostra a folga).
+    </div>`;
+
+  return cabecalhoCusteio(base, 'pleno', explicacao) + editorCanais + cards + legendaCores +
     tabelaCusteio(cab, linhas, '', 'Nenhum produto ativo cadastrado.') +
     `<p class="dash-nota" style="margin-top:12px; line-height:1.6;">
       <strong>Como ler.</strong> <em>Custos indiretos</em> = variáveis de produção + fixos de produção (incl. pró-labore) rateados. <em>Despesas indiretas</em> = fixos de venda e administração rateados. <em>Despesas financeiras</em> = taxa de maquininha e despesas variáveis embutidas no preço <em>Custo + lucro</em>.

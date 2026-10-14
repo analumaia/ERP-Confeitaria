@@ -1396,3 +1396,49 @@ h1, h2, h3, .fonte-titulo{
 .fluxo-qtd{ color: var(--marrom-cafe); font-size: 0.7rem; font-weight: 500; margin-left: 6px; }
 .fluxo-saldo td, .fluxo-total td{ font-weight: 700; background: var(--bege-claro); border-top: 1px solid var(--bege-escuro); }
 .fluxo-final td{ font-weight: 800; font-size: 0.95rem; background: var(--bege-escuro); border-top: 2px solid var(--marrom-claro); }
+
+
+/* ---------------------------------------------------------
+   CUSTEIOS (páginas detalhadas, formato planilha)
+--------------------------------------------------------- */
+.precif-atalhos{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.cust-topo{ display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin: 0 0 16px; }
+.cust-topo .dash-nota{ flex: 1 1 420px; }
+.kpi-grid.kpi-grid-5{ grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.kpi-input input{
+  width: 100%; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--marrom-claro);
+  background: var(--branco); color: var(--marrom-escuro); font-size: 1.1rem; font-weight: 700; font-family: inherit;
+}
+.kpi-input input:focus{ border-color: var(--rosa); outline: none; }
+.kpi-input{ margin: 4px 0; }
+
+.custeio-tabela{ min-width: 0; width: 100%; font-size: 0.76rem; }
+.custeio-tabela th, .custeio-tabela td{ padding-left: 4px; padding-right: 4px; }
+.custeio-tabela td.celula-principal{ font-weight: 700; min-width: 90px; }
+.custeio-tabela td.negativo{ color: var(--vermelho); }
+.custeio-tabela input[type="number"]{ width: 58px; padding: 5px 6px; text-align: center; }
+.custeio-tabela tfoot td{ font-weight: 700; background: var(--bege); border-top: 2px solid var(--bege-escuro); }
+.custeio-tabela th small{ display: block; font-weight: 500; }
+
+.canais-card{ margin-bottom: 16px; }
+.canal-linha{ display: grid; grid-template-columns: minmax(150px, 1.4fr) 110px 150px 36px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.canal-linha input[type="text"], .canal-linha input[type="number"]{
+  width: 100%; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--marrom-claro);
+  background: var(--branco); color: var(--marrom-escuro); font-family: inherit; font-size: 0.85rem;
+}
+.canal-linha input:focus{ border-color: var(--rosa); outline: none; }
+.canal-cabecalho{ font-size: 0.72rem; color: var(--marrom-cafe); margin-bottom: 4px; }
+.canal-check{ font-size: 0.82rem; color: var(--marrom-cafe); display: flex; gap: 6px; align-items: center; }
+.canais-card .btn-add-item{ margin-top: 4px; }
+@media (max-width: 640px){
+  .canal-linha{ grid-template-columns: 1fr 90px 36px; }
+  .canal-linha .canal-check{ grid-column: 1 / 3; }
+}
+.custeio-tabela th:first-child, .custeio-tabela td:first-child{ min-width: 0; white-space: nowrap; padding-left: 12px; }
+
+.canal-imposto{ display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; margin-bottom: 14px; }
+.canal-imposto input{ width: 100%; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--marrom-claro); background: var(--branco); color: var(--marrom-escuro); font-family: inherit; font-size: 0.85rem; }
+@media (max-width: 640px){ .canal-imposto{ grid-template-columns: 90px 1fr; } }
+.custeio-tabela td small{ white-space: normal; max-width: 84px; margin-left: auto; line-height: 1.25; }
+.custeio-tabela td{ white-space: nowrap; }
+.custeio-tabela td.celula-principal{ white-space: normal; }

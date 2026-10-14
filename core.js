@@ -69,18 +69,18 @@ const supabaseClient = window.supabase.createClient(
 // --------------------------------------------------------
 // Abas do painel
 // --------------------------------------------------------
-const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'fichas', 'vendas', 'financeiro', 'caixa', 'dre', 'precificacao', 'insumos', 'embalagens', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
+const ABAS = ['dashboard', 'estoque', 'compras', 'producao', 'fichas', 'vendas', 'financeiro', 'caixa', 'dre', 'precificacao', 'custeio_variavel', 'custeio_absorcao', 'custeio_pleno', 'insumos', 'embalagens', 'produtos', 'fornecedores', 'clientes', 'configuracoes'];
 
 // Estrutura do menu lateral: grupos com sub-itens (cada item, inclusive o grupo, abre uma tela)
 const MENU_LATERAL = [
   { chave: 'dashboard' },
   { chave: 'vendas', filhos: ['clientes', 'produtos'] },
   { chave: 'estoque', filhos: ['producao', 'fichas', 'compras', 'insumos', 'embalagens', 'fornecedores'] },
-  { chave: 'financeiro', filhos: ['caixa', 'dre', 'precificacao'] },
+  { chave: 'financeiro', filhos: ['caixa', 'dre', 'precificacao', 'custeio_variavel', 'custeio_absorcao', 'custeio_pleno'] },
   { chave: 'configuracoes' },
 ];
-const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', fichas: '📋', vendas: '💰', financeiro: '💵', caixa: '🧾', dre: '📑', precificacao: '🏷️', insumos: '🌾', embalagens: '🎁', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
-const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', fichas: 'Fichas técnicas', vendas: 'Vendas', financeiro: 'Financeiro', caixa: 'Controle de caixa', dre: 'Relatório DRE', precificacao: 'Precificação', insumos: 'Insumos', embalagens: 'Embalagens', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
+const ICONES_ABA = { dashboard: '🎯', estoque: '📊', compras: '🛒', producao: '🏭', fichas: '📋', vendas: '💰', financeiro: '💵', caixa: '🧾', dre: '📑', precificacao: '🏷️', custeio_variavel: '📉', custeio_absorcao: '🏭', custeio_pleno: '💎', insumos: '🌾', embalagens: '🎁', produtos: '🧁', fornecedores: '📦', clientes: '👤', configuracoes: '⚙️' };
+const TITULOS_ABA = { dashboard: 'Visão geral', estoque: 'Estoque', compras: 'Compras', producao: 'Produção', fichas: 'Fichas técnicas', vendas: 'Vendas', financeiro: 'Financeiro', caixa: 'Controle de caixa', dre: 'Relatório DRE', precificacao: 'Precificação', custeio_variavel: 'Custeio variável', custeio_absorcao: 'Custeio por absorção', custeio_pleno: 'Custeio pleno', insumos: 'Insumos', embalagens: 'Embalagens', produtos: 'Produtos', fornecedores: 'Fornecedores', clientes: 'Clientes', configuracoes: 'Configurações' };
 
 // --------------------------------------------------------
 // Estado compartilhado entre módulos
@@ -192,7 +192,10 @@ function trocarAba(chave){
     else mostrarToast('Falta incluir dre.js no painel.html.', 'erro');
   } else if (chave === 'precificacao'){
     if (typeof carregarPrecificacao === 'function') carregarPrecificacao();
-    else mostrarToast('Falta incluir precificacao.js no painel.html.', 'erro'); // tela própria (precificacao.js): custeio variável, por absorção e pleno
+    else mostrarToast('Falta incluir precificacao.js no painel.html.', 'erro'); // tela própria (precificacao.js): premissas e embalagens por produto
+  } else if (chave === 'custeio_variavel' || chave === 'custeio_absorcao' || chave === 'custeio_pleno'){
+    if (typeof carregarCusteio === 'function') carregarCusteio(chave.replace('custeio_', '')); // telas próprias (custeios.js)
+    else mostrarToast('Falta incluir custeios.js no painel.html.', 'erro');
   } else if (chave === 'financeiro'){
     // reservado para novos recursos — sem carregamento por enquanto
     // (precisa deste ramo pra não cair no carregamento genérico abaixo)

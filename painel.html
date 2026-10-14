@@ -517,10 +517,22 @@
     <div class="item-sub" style="white-space:normal; margin-bottom:10px;">Relacione as embalagens de cada produto (pode ser mais de uma). Elas entram no custo variável de cada unidade.</div>
     <div id="precifEmbalagens"></div>
 
-    <h3 class="fonte-titulo" style="font-size:1.1rem; margin:22px 0 10px;">Preços por produto</h3>
-    <div id="precifTabela"><div class="lista-vazia">Carregando...</div></div>
-    <div id="precifDetalhe"></div>
-    <div id="precifLegenda"></div>
+  </section>
+
+  <!-- CUSTEIOS (conteúdo montado por custeios.js) -->
+  <section class="conteudo-modulo" data-modulo="custeio_variavel">
+    <div class="barra-modulo"><h2>Custeio variável</h2></div>
+    <div id="custeioVariavelCorpo"><div class="lista-vazia">Carregando...</div></div>
+  </section>
+
+  <section class="conteudo-modulo" data-modulo="custeio_absorcao">
+    <div class="barra-modulo"><h2>Custeio por absorção</h2></div>
+    <div id="custeioAbsorcaoCorpo"><div class="lista-vazia">Carregando...</div></div>
+  </section>
+
+  <section class="conteudo-modulo" data-modulo="custeio_pleno">
+    <div class="barra-modulo"><h2>Custeio pleno</h2></div>
+    <div id="custeioPlenoCorpo"><div class="lista-vazia">Carregando...</div></div>
   </section>
 
   <!-- INSUMOS -->
@@ -939,6 +951,7 @@
 <script src="configuracoes.js"></script>
 <script src="dre.js"></script>
 <script src="precificacao.js"></script>
+<script src="custeios.js"></script>
 <script src="init.js"></script>
 </body>
 </html>

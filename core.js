@@ -195,6 +195,23 @@ function alternarMenuLateral(abrir){
   btnMenu.setAttribute('aria-expanded', String(abrindo));
 }
 btnMenu.addEventListener('click', () => alternarMenuLateral());
+
+// Em tela estreita o menu vira gaveta e é movido para fora do cabeçalho (evita problemas de
+// empilhamento/toque de um elemento fixo dentro do cabeçalho fixo); em tela larga volta para o cabeçalho.
+const consultaGaveta = window.matchMedia('(max-width: 900px)');
+function posicionarMenu(){
+  const nav = menuLateral;
+  const sair = document.getElementById('btnSair');
+  if (consultaGaveta.matches){
+    if (nav.parentNode !== document.body) document.body.appendChild(nav);
+  } else if (sair && nav.nextElementSibling !== sair){
+    sair.parentNode.insertBefore(nav, sair);
+  }
+  alternarMenuLateral(false);
+}
+if (consultaGaveta.addEventListener) consultaGaveta.addEventListener('change', posicionarMenu);
+else if (consultaGaveta.addListener) consultaGaveta.addListener(posicionarMenu);
+posicionarMenu();
 menuFundo.addEventListener('click', () => alternarMenuLateral(false));
 
 function trocarAba(chave){

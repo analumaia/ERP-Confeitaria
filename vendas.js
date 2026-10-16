@@ -653,10 +653,11 @@ function montarHtmlComanda(pedido, config){
   const frete = Number(pedido.valor_frete || 0);
   const totalAPagar = valorItens - desconto + frete;
 
+  // cada item em duas linhas (nome inteiro em cima; qtd × unitário e total embaixo): cabe em papel estreito sem apertar colunas
   const linhasItens = pedido.pedido_itens.map(item => {
     const nome = item.produtos ? item.produtos.nome : '(produto removido)';
     const subtotal = Number(item.quantidade) * Number(item.preco_unitario);
-    return `<tr><td>${item.quantidade} ${esc(nome)} (${m(item.preco_unitario)})</td><td class="valor">${m(subtotal)}</td></tr>`;
+    return `<div class="item"><div class="item-nome">${esc(nome)}</div><div class="linha-valor"><span>${item.quantidade} x ${m(item.preco_unitario)}</span><span>${m(subtotal)}</span></div></div>`;
   }).join('');
 
   const cliente = pedido.clientes;
@@ -670,32 +671,37 @@ function montarHtmlComanda(pedido, config){
   const larguraBruta = String(config.largura_papel || '');
   const largura = /^\d{2,3}(\.\d+)?mm$/.test(larguraBruta) ? larguraBruta : '56mm'; // só aceita valores como 56mm/58mm/80mm (vai direto pro CSS)
 
+  // Layout fluido: ocupa a largura útil que a impressora oferece (no máximo a largura configurada), em vez de
+  // forçar uma largura fixa em mm — assim não corta nas bordas e dispensa reduzir a escala na impressão.
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comanda ${numero}</title>
 <style>
-  @page { size: ${largura} auto; margin: 2mm; }
+  @page { margin: 0; }
   * { box-sizing: border-box; }
-  html, body { width: ${largura}; max-width: 100%; }
-  body { margin: 0 auto; word-break: break-word; overflow-wrap: anywhere; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; }
+  html, body { margin: 0; padding: 0; }
+  body { width: 100%; max-width: ${largura}; padding: 2mm 2.5mm; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.3; font-weight: 600; color: #000; overflow-wrap: anywhere; }
   .centro { text-align: center; }
-  .negrito { font-weight: bold; }
-  .linha { border-top: 1px dashed #000; margin: 5px 0; }
-  table { width: 100%; border-collapse: collapse; }
-  td { padding: 1px 0; vertical-align: top; }
-  .valor { text-align: right; white-space: nowrap; }
-  .totais td { font-weight: bold; padding-top: 2px; }
+  .negrito { font-weight: 800; }
+  .titulo { font-size: 16px; font-weight: 800; }
+  .linha { border-top: 1px dashed #000; margin: 6px 0; }
+  .item { margin-bottom: 5px; }
+  .item-nome { font-weight: 800; }
+  .linha-valor { display: flex; justify-content: space-between; gap: 8px; }
+  .linha-valor span:last-child { white-space: nowrap; }
+  .total-final { font-size: 16px; font-weight: 800; margin-top: 2px; }
 </style>
 </head>
 <body>
-  ${config.nome_loja ? `<div class="centro negrito" style="font-size:13px;">${esc(config.nome_loja)}</div>` : ''}
+  ${config.nome_loja ? `<div class="centro titulo">${esc(config.nome_loja)}</div>` : ''}
   ${config.endereco_loja ? `<div class="centro">${esc(config.endereco_loja)}</div>` : ''}
   ${config.telefone_loja ? `<div class="centro">${esc(config.telefone_loja)}</div>` : ''}
   ${config.cnpj_loja ? `<div class="centro">CNPJ: ${esc(config.cnpj_loja)}</div>` : ''}
-  <div class="centro">IMPRESSO EM ${agora}</div>
-  ${config.mostrar_aviso_nao_fiscal ? '<div class="centro negrito">*** NAO E DOCUMENTO FISCAL ***</div>' : ''}
+  <div class="centro">Impresso em ${agora}</div>
+  ${config.mostrar_aviso_nao_fiscal ? '<div class="centro negrito">*** NÃO É DOCUMENTO FISCAL ***</div>' : ''}
   <div class="linha"></div>
 
   <div class="negrito">${cliente ? esc(cliente.nome) : 'Sem cliente'}</div>
@@ -703,22 +709,18 @@ function montarHtmlComanda(pedido, config){
   ${blocoEndereco}
   <div class="linha"></div>
 
-  <div>ABERTO EM ${aberturaFormatada}</div>
-  <div>(Pedido Nº: ${numero})</div>
+  <div>Aberto em ${aberturaFormatada}</div>
+  <div class="negrito">Pedido Nº ${numero}</div>
   <div class="linha"></div>
 
-  <table>
-    <tr><td class="negrito">ITEM (V.Unit)</td><td class="valor negrito">Total</td></tr>
-    ${linhasItens}
-  </table>
+  <div class="linha-valor negrito"><span>ITEM (qtd x unit.)</span><span>Total</span></div>
+  ${linhasItens}
   <div class="linha"></div>
 
-  <table class="totais">
-    <tr><td>TOTAL:</td><td class="valor">${m(valorItens)}</td></tr>
-    ${desconto > 0 ? `<tr><td>- DESCONTO:</td><td class="valor">${m(desconto)}</td></tr>` : ''}
-    ${frete > 0 ? `<tr><td>+ ENTREGA:</td><td class="valor">${m(frete)}</td></tr>` : ''}
-    <tr><td>= TOTAL A PAGAR:</td><td class="valor">${m(totalAPagar)}</td></tr>
-  </table>
+  <div class="linha-valor"><span>Total</span><span>${m(valorItens)}</span></div>
+  ${desconto > 0 ? `<div class="linha-valor"><span>- Desconto</span><span>${m(desconto)}</span></div>` : ''}
+  ${frete > 0 ? `<div class="linha-valor"><span>+ Entrega</span><span>${m(frete)}</span></div>` : ''}
+  <div class="linha-valor total-final"><span>A PAGAR</span><span>${m(totalAPagar)}</span></div>
 
   ${pedido.observacao ? `<div class="linha"></div><div>Obs: ${esc(pedido.observacao)}</div>` : ''}
   ${config.mensagem_rodape ? `<div class="linha"></div><div class="centro">${esc(config.mensagem_rodape).replace(/\n/g, '<br>')}</div>` : ''}

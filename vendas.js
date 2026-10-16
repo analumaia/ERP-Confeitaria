@@ -635,7 +635,7 @@ async function obterConfigImpressaoComanda(){
   if (error || !data){
     // ainda não rodou a migração, ou a linha singleton sumiu — segue com
     // um padrão razoável em vez de travar a impressão
-    configImpressaoComandaCache = { largura_papel: '80mm', nome_loja: '', endereco_loja: '', telefone_loja: '', cnpj_loja: '', mensagem_rodape: '', mostrar_aviso_nao_fiscal: true };
+    configImpressaoComandaCache = { largura_papel: '56mm', nome_loja: '', endereco_loja: '', telefone_loja: '', cnpj_loja: '', mensagem_rodape: '', mostrar_aviso_nao_fiscal: true };
   } else {
     configImpressaoComandaCache = data;
   }
@@ -668,7 +668,7 @@ function montarHtmlComanda(pedido, config){
   ` : '';
 
   const larguraBruta = String(config.largura_papel || '');
-  const largura = /^\d{2,3}(\.\d+)?mm$/.test(larguraBruta) ? larguraBruta : '80mm'; // só aceita valores como 58mm/80mm (vai direto pro CSS)
+  const largura = /^\d{2,3}(\.\d+)?mm$/.test(larguraBruta) ? larguraBruta : '56mm'; // só aceita valores como 56mm/58mm/80mm (vai direto pro CSS)
 
   return `<!DOCTYPE html>
 <html>
@@ -678,7 +678,8 @@ function montarHtmlComanda(pedido, config){
 <style>
   @page { size: ${largura} auto; margin: 2mm; }
   * { box-sizing: border-box; }
-  body { width: ${largura}; margin: 0 auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; }
+  html, body { width: ${largura}; max-width: 100%; }
+  body { margin: 0 auto; word-break: break-word; overflow-wrap: anywhere; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; }
   .centro { text-align: center; }
   .negrito { font-weight: bold; }
   .linha { border-top: 1px dashed #000; margin: 5px 0; }

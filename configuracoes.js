@@ -388,7 +388,7 @@ async function carregarConfigImpressao(){
   document.getElementById('campoEnderecoLojaImpressao').value = data.endereco_loja || '';
   document.getElementById('campoTelefoneLojaImpressao').value = data.telefone_loja || '';
   document.getElementById('campoCnpjLojaImpressao').value = data.cnpj_loja || '';
-  document.getElementById('campoLarguraPapelImpressao').value = data.largura_papel || '80mm';
+  document.getElementById('campoLarguraPapelImpressao').value = data.largura_papel || '56mm';
   document.getElementById('campoMensagemRodapeImpressao').value = data.mensagem_rodape || '';
   document.getElementById('campoAvisoNaoFiscalImpressao').checked = data.mostrar_aviso_nao_fiscal !== false;
 }

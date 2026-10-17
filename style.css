@@ -764,6 +764,9 @@ h1, h2, h3, .fonte-titulo{
 .kpi-valor{ font-size: 1.4rem; font-weight: 700; line-height: 1.15; word-break: break-word; }
 
 .cartao-grafico{ overflow: hidden; }
+.dash-financeiro .cartao-grafico{ display: flex; flex-direction: column; }
+.dash-financeiro .grafico-caixa.grafico-alto{ min-height: 240px; }
+.grafico-subtitulo{ margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--bege-escuro); }
 .grafico-caixa{ position: relative; height: 210px; }
 .grafico-caixa.grafico-alto{ flex: 1; height: auto; min-height: 300px; min-width: 0; overflow: hidden; }
 

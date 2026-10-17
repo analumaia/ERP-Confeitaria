@@ -44,8 +44,10 @@ async function carregarDashboard(){
 
   // um conjunto só de pedidos e lançamentos cobrindo os 6 meses: tudo (KPIs, DRE do mês,
   // comparação com o mês anterior e gráfico) sai das MESMAS funções de cálculo (caixa.js)
+  const diaSeguinteAoMes = limitesDoMes(deslocarMes(mesSelecionado, 1)).primeiroDia;
+  const promessaCaixaTotal = buscarLancamentosAnterioresCaixa(diaSeguinteAoMes); // tudo que entrou e saiu até o fim do mês (caixa.js)
   const respostas = await Promise.all([
-    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, data, origem, categoria, categorias_financeiras(grupo_dre)').gte('data', seisMesesAtras.primeiroDia).lte('data', mesAtual.ultimoDia),
+    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, data, origem, categoria, categorias_financeiras(grupo_dre, natureza)').gte('data', seisMesesAtras.primeiroDia).lte('data', mesAtual.ultimoDia),
     supabaseClient.from('pedidos').select(SELECT_PEDIDOS_RESULTADO).eq('status', 'confirmado').gte('data_pedido', seisMesesAtras.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
     supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
     supabaseClient.from('metas').select('*').eq('mes_ano', mesSelecionado).order('criado_em'),
@@ -57,6 +59,7 @@ async function carregarDashboard(){
     supabaseClient.from('producoes_fichas').select('data_producao, quantidade_produzida, observacao, criado_em, receitas(nome, rendimento_unidade)').order('data_producao', { ascending: false }).order('criado_em', { ascending: false }).limit(8),
   ]);
 
+  const respCaixaTotal = await promessaCaixaTotal;
   if (requisicao !== dashboardRequisicao) return; // o período mudou enquanto carregava
 
   // producoes_fichas pode não existir em bancos antigos: não derruba o painel inteiro por isso
@@ -89,6 +92,17 @@ async function carregarDashboard(){
   (respFinanceiro6Meses.data || []).forEach(l => { (lancamentosPorMes[l.data.slice(0, 7)] = lancamentosPorMes[l.data.slice(0, 7)] || []).push(l); });
   const resultadoDoMes = chave => calcularResultadoMes(pedidosPorMes[chave] || [], lancamentosPorMes[chave] || [], custoUnitarioPorProduto);
 
+  // margem de contribuição = receita líquida − CMV − taxas − despesas VARIÁVEIS lançadas (categorias com natureza "variável").
+  // Impostos e CMV manual já estão na receita líquida / no CMV, então ficam de fora para não contar duas vezes.
+  const despesasVariaveisLancadas = chave => (lancamentosPorMes[chave] || [])
+    .filter(l => !ehLancamentoAutomatico(l) && l.tipo === 'saida' && l.categorias_financeiras && l.categorias_financeiras.natureza === 'variavel'
+      && !['impostos', 'cmv'].includes(grupoDoLancamento(l)))
+    .reduce((s, l) => s + Number(l.valor), 0);
+  const margemContribuicaoDoMes = chave => {
+    const r = resultadoDoMes(chave);
+    return r.receitaLiquida - r.cmv - r.taxas - despesasVariaveisLancadas(chave);
+  };
+
   const hoje = agoraBrasilia();
   const mesDeHoje = mesAnoLocal(hoje);
   const pedidosMes = pedidosPorMes[mesSelecionado] || [];
@@ -114,6 +128,9 @@ async function carregarDashboard(){
     custoTotal: resultadoAnterior.cmvVendas, taxaMaquininha: resultadoAnterior.taxas, frete: resultadoAnterior.frete,
   };
   const margemPercentual = resultado.receitaLiquida > 0 ? (resultado.lucroBruto / resultado.receitaLiquida) * 100 : 0;
+  const margemContribuicao = margemContribuicaoDoMes(mesSelecionado);
+  const margemContribuicaoPercentual = resultado.receitaLiquida > 0 ? (margemContribuicao / resultado.receitaLiquida) * 100 : 0;
+  const caixaTotal = respCaixaTotal.error ? null : respCaixaTotal.data.reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
   const margemLiquidaPercentual = resultado.receitaLiquida > 0 ? (resultado.lucroPrejuizo / resultado.receitaLiquida) * 100 : 0;
 
   // produtos vendidos no mês sem ficha técnica (custo zero distorce o lucro)
@@ -179,7 +196,8 @@ async function carregarDashboard(){
   const serieAnterior = dias.map(d => d <= diasNoMesAnterior ? (porDiaAnterior[d] || 0) : null);
 
   // -------- série mensal (6 meses até o período): receita líquida x custos e despesas, e o lucro --------
-  const mesesRotulo = [], receitaPorMes = [], custosPorMes = [], lucroPorMes = [];
+  const mesesRotulo = [], receitaPorMes = [], custosPorMes = [], lucroPorMes = [], margemPorMes = [], caixaPorMes = [];
+  const chavesMeses = [];
   for (let i = 5; i >= 0; i--){
     const chave = deslocarMes(mesSelecionado, -i);
     const [a, m] = chave.split('-').map(Number);
@@ -188,6 +206,16 @@ async function carregarDashboard(){
     receitaPorMes.push(r.receitaLiquida);
     custosPorMes.push(r.receitaLiquida - r.lucroPrejuizo);
     lucroPorMes.push(r.lucroPrejuizo);
+    margemPorMes.push(margemContribuicaoDoMes(chave));
+    chavesMeses.push(chave);
+  }
+  // total em caixa no fim de cada mês: parte do saldo final e volta mês a mês, desfazendo o movimento de cada um
+  if (caixaTotal !== null){
+    let saldo = caixaTotal;
+    for (let i = chavesMeses.length - 1; i >= 0; i--){
+      caixaPorMes[i] = saldo;
+      saldo -= (lancamentosPorMes[chavesMeses[i]] || []).reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
+    }
   }
 
   // -------- helpers de render --------
@@ -306,6 +334,8 @@ async function carregarDashboard(){
       <div class="cartao-item cartao-grafico">
         <div class="titulo-item"><span>Receita x custos e despesas (6 meses)</span></div>
         <div class="grafico-caixa grafico-alto"><canvas id="graficoCrescimentoFinanceiro"></canvas></div>
+        <div class="titulo-item grafico-subtitulo"><span>Margem de contribuição x total em caixa (fim de cada mês)</span></div>
+        <div class="grafico-caixa grafico-alto"><canvas id="graficoMargemCaixa"></canvas></div>
       </div>
       <div class="kpi-grid">
         ${cardKpi('CMV (custo dos produtos vendidos)', atual.custoTotal, anterior.custoTotal, formatarMoeda, false)}
@@ -327,6 +357,17 @@ async function carregarDashboard(){
           <div class="linha-info"><span>Sobre a receita líquida</span><span>${margemLiquidaPercentual.toFixed(1)}%</span></div>
           <div class="item-sub">Lucro bruto − taxa − outras despesas. Detalhe na DRE.</div>
         </div>
+        <div class="cartao-item kpi">
+          <div class="kpi-titulo">Margem de contribuição</div>
+          <div class="kpi-valor" style="color:${margemContribuicao >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(margemContribuicao)}</div>
+          <div class="linha-info"><span>Sobre a receita líquida</span><span>${margemContribuicaoPercentual.toFixed(1)}%</span></div>
+          <div class="item-sub">Receita líquida − CMV − taxas − despesas variáveis lançadas. É o que sobra para pagar os custos fixos e gerar lucro.</div>
+        </div>
+        <div class="cartao-item kpi clicavel" data-ir-aba="caixa" role="link" tabindex="0">
+          <div class="kpi-titulo">Total em caixa</div>
+          <div class="kpi-valor" style="color:${caixaTotal !== null && caixaTotal < 0 ? 'var(--vermelho)' : 'var(--marrom-escuro)'};">${caixaTotal === null ? '—' : formatarMoeda(caixaTotal)}</div>
+          <div class="item-sub">Entradas − saídas acumuladas ${mesSelecionado === mesDeHoje ? 'até hoje' : 'até o fim do mês selecionado'} (não é conciliado com o extrato do banco).</div>
+        </div>
       </div>
     </div>
   `;
@@ -339,6 +380,7 @@ async function carregarDashboard(){
 
   desenharGraficoVendas(dias, serieAtual, serieAnterior);
   desenharGraficoCrescimento(mesesRotulo, receitaPorMes, custosPorMes, lucroPorMes);
+  desenharGraficoMargemCaixa(mesesRotulo, margemPorMes, caixaPorMes);
 }
 
 let graficoVendasInstancia = null;
@@ -382,6 +424,35 @@ function desenharGraficoCrescimento(labels, receita, custos, lucro){
         { type: 'bar', label: 'Receita líquida', data: receita, backgroundColor: '#E0709A', borderRadius: 6 },
         { type: 'bar', label: 'Custos e despesas', data: custos, backgroundColor: '#8B5A2B', borderRadius: 6 },
         { type: 'line', label: 'Lucro', data: lucro, borderColor: '#3F7D4E', backgroundColor: '#3F7D4E', tension: 0.3, pointRadius: 3 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: '#3A2A1C', font: { family: 'Poppins' } } } },
+      scales: {
+        x: { ticks: { color: '#8B5A2B' } },
+        y: { ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
+      },
+    },
+  });
+}
+
+
+let graficoMargemCaixaInstancia = null;
+function desenharGraficoMargemCaixa(labels, margem, caixa){
+  const canvas = document.getElementById('graficoMargemCaixa');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (graficoMargemCaixaInstancia) graficoMargemCaixaInstancia.destroy();
+
+  const temCaixa = caixa.length === labels.length;
+  graficoMargemCaixaInstancia = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: 'Margem de contribuição', data: margem, backgroundColor: '#C9946B', borderRadius: 6 },
+        ...(temCaixa ? [{ type: 'line', label: 'Total em caixa', data: caixa, borderColor: '#3A2A1C', backgroundColor: '#3A2A1C', tension: 0.3, pointRadius: 3 }] : []),
       ],
     },
     options: {

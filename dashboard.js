@@ -5,8 +5,10 @@
      2. Top 10 produtos, produtos e insumos abaixo do mínimo
      3. Últimas produções e compras aguardando recebimento
      4. Financeiro estratégico (gráfico de 6 meses + 6 indicadores)
-   O filtro "Período" é um mês; a comparação é sempre com o mês
-   anterior ao selecionado. Depende de limitesDoMes (caixa.js)
+   O filtro "Período" é um intervalo de datas (atalhos: mês, mês
+   anterior, 3 meses, ano). A comparação é com o mês anterior (quando
+   o período é um mês fechado) ou com o período imediatamente anterior
+   de mesmo tamanho. Depende de limitesDoMes (caixa.js)
    e só LÊ dados dos outros módulos.
    ============================================================ */
 
@@ -27,30 +29,123 @@ function saldoDeRelacao(relacao){
   return registro ? Number(registro.saldo_atual) : 0;
 }
 
-document.getElementById('filtroMesDashboard').addEventListener('change', carregarDashboard);
+// --------------------------------------------------------
+// Período: data inicial e final (atalhos preenchem as duas datas)
+// --------------------------------------------------------
+const campoDashDe = document.getElementById('dashDe');
+const campoDashAte = document.getElementById('dashAte');
+
+function somarDiasISO(iso, n){
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return dataLocalISO(d);
+}
+function diasEntreISO(de, ate){
+  return Math.round((new Date(ate + 'T12:00:00') - new Date(de + 'T12:00:00')) / 86400000);
+}
+function formatarDataBR(iso){ return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR'); }
+
+function definirPeriodoDashboard(tipo){
+  const hoje = agoraBrasilia();
+  const a = hoje.getFullYear(), m = hoje.getMonth();
+  let de, ate;
+  if (tipo === 'anterior'){ de = new Date(a, m - 1, 1); ate = new Date(a, m, 0); }
+  else if (tipo === '3meses'){ de = new Date(a, m - 2, 1); ate = new Date(a, m + 1, 0); }
+  else if (tipo === 'ano'){ de = new Date(a, 0, 1); ate = new Date(a, 11, 31); }
+  else { de = new Date(a, m, 1); ate = new Date(a, m + 1, 0); }
+  campoDashDe.value = dataLocalISO(de);
+  campoDashAte.value = dataLocalISO(ate);
+  carregarDashboard();
+}
+
+function marcarChipDashboard(){
+  const hoje = agoraBrasilia();
+  const a = hoje.getFullYear(), m = hoje.getMonth();
+  const iso = (x, y) => [dataLocalISO(x), dataLocalISO(y)].join('|');
+  const atual = [campoDashDe.value, campoDashAte.value].join('|');
+  const mapa = {
+    mes: iso(new Date(a, m, 1), new Date(a, m + 1, 0)),
+    anterior: iso(new Date(a, m - 1, 1), new Date(a, m, 0)),
+    '3meses': iso(new Date(a, m - 2, 1), new Date(a, m + 1, 0)),
+    ano: iso(new Date(a, 0, 1), new Date(a, 11, 31)),
+  };
+  document.querySelectorAll('[data-periodo-dash]').forEach(b => b.classList.toggle('ativo', mapa[b.dataset.periodoDash] === atual));
+}
+
+function aoMudarDatasDashboard(){
+  if (!campoDashDe.value || !campoDashAte.value) return; // espera as duas datas
+  marcarChipDashboard();
+  if (campoDashDe.value > campoDashAte.value){
+    mostrarToast('A data inicial não pode ser depois da data final.', 'erro');
+    return;
+  }
+  carregarDashboard();
+}
+campoDashDe.addEventListener('change', aoMudarDatasDashboard);
+campoDashAte.addEventListener('change', aoMudarDatasDashboard);
+document.querySelectorAll('[data-periodo-dash]').forEach(botao => {
+  botao.addEventListener('click', () => definirPeriodoDashboard(botao.dataset.periodoDash));
+});
+
+// o Supabase devolve no máximo 1000 linhas por consulta: períodos longos precisam paginar
+async function buscarPaginado(montarConsulta){
+  const todos = [];
+  for (let inicio = 0; ; inicio += 1000){
+    const { data, error } = await montarConsulta().range(inicio, inicio + 999);
+    if (error) return { error };
+    todos.push(...data);
+    if (data.length < 1000) break;
+  }
+  return { data: todos };
+}
 
 async function carregarDashboard(){
   const container = document.getElementById('listaDashboard');
-  const campoMes = document.getElementById('filtroMesDashboard');
-  if (!campoMes.value) campoMes.value = mesAtualISO();
-  const mesSelecionado = campoMes.value;
+  if (!campoDashDe.value || !campoDashAte.value){
+    const hojeIso = hojeISO();
+    const mesHoje = limitesDoMes(hojeIso.slice(0, 7));
+    campoDashDe.value = mesHoje.primeiroDia;
+    campoDashAte.value = mesHoje.ultimoDia;
+  }
+  const inicio = campoDashDe.value, fim = campoDashAte.value;
+  if (inicio > fim) return;
+  marcarChipDashboard();
   const requisicao = ++dashboardRequisicao;
 
   container.innerHTML = '<div class="lista-vazia">Carregando...</div>';
 
-  const mesAtual = limitesDoMes(mesSelecionado);
-  const mesAnteriorChave = deslocarMes(mesSelecionado, -1);
-  const seisMesesAtras = limitesDoMes(deslocarMes(mesSelecionado, -5));
+  const hojeIso = hojeISO();
+  const mesInicio = inicio.slice(0, 7), mesFim = fim.slice(0, 7);
+  const limFim = limitesDoMes(mesFim);
+  const seisMesesAtras = limitesDoMes(deslocarMes(mesFim, -5));
 
-  // um conjunto só de pedidos e lançamentos cobrindo os 6 meses: tudo (KPIs, DRE do mês,
-  // comparação com o mês anterior e gráfico) sai das MESMAS funções de cálculo (caixa.js)
-  const diaSeguinteAoMes = limitesDoMes(deslocarMes(mesSelecionado, 1)).primeiroDia;
-  const promessaCaixaTotal = buscarLancamentosAnterioresCaixa(diaSeguinteAoMes); // tudo que entrou e saiu até o fim do mês (caixa.js)
+  // o período termina "hoje" para fins de comparação quando ainda não acabou (4 dias não se comparam com o mês anterior inteiro)
+  const fimEfetivo = fim > hojeIso ? (hojeIso < inicio ? inicio : hojeIso) : fim;
+  const nDias = diasEntreISO(inicio, fimEfetivo) + 1;
+  const mesInteiro = inicio === limitesDoMes(mesInicio).primeiroDia && mesInicio === mesFim && fim === limFim.ultimoDia;
+  let inicioAnt, fimAnt;
+  if (mesInteiro){
+    const lim = limitesDoMes(deslocarMes(mesInicio, -1));
+    inicioAnt = lim.primeiroDia;
+    const fimMesmoTrecho = somarDiasISO(inicioAnt, nDias - 1);
+    fimAnt = fimMesmoTrecho < lim.ultimoDia ? fimMesmoTrecho : lim.ultimoDia;
+  } else {
+    fimAnt = somarDiasISO(inicio, -1);
+    inicioAnt = somarDiasISO(fimAnt, -(nDias - 1));
+  }
+  const emAndamento = fimEfetivo < fim;
+  const rotuloAnterior = mesInteiro ? (emAndamento ? `Mês ant. (até dia ${fimEfetivo.slice(8, 10)})` : 'Mês ant.') : 'Período ant.';
+
+  // um conjunto só de pedidos e lançamentos cobrindo tudo: KPIs, DRE do período, comparação e gráficos
+  // saem das MESMAS funções de cálculo (caixa.js)
+  const buscaDesde = [seisMesesAtras.primeiroDia, inicioAnt, limitesDoMes(mesInicio).primeiroDia].sort()[0];
+  const diaSeguinteAoMes = limitesDoMes(deslocarMes(mesFim, 1)).primeiroDia;
+  const promessaCaixaTotal = buscarLancamentosAnterioresCaixa(diaSeguinteAoMes); // tudo que entrou e saiu até o fim do mês final (caixa.js)
   const respostas = await Promise.all([
-    supabaseClient.from('lancamentos_financeiros').select('tipo, valor, data, origem, categoria, categorias_financeiras(grupo_dre, natureza)').gte('data', seisMesesAtras.primeiroDia).lte('data', mesAtual.ultimoDia),
-    supabaseClient.from('pedidos').select(SELECT_PEDIDOS_RESULTADO).eq('status', 'confirmado').gte('data_pedido', seisMesesAtras.primeiroDia).lte('data_pedido', mesAtual.ultimoDia),
+    buscarPaginado(() => supabaseClient.from('lancamentos_financeiros').select('id, tipo, valor, data, origem, categoria, categorias_financeiras(grupo_dre, natureza)').gte('data', buscaDesde).lte('data', limFim.ultimoDia).order('data').order('id')),
+    buscarPaginado(() => supabaseClient.from('pedidos').select(SELECT_PEDIDOS_RESULTADO).eq('status', 'confirmado').gte('data_pedido', buscaDesde).lte('data_pedido', limFim.ultimoDia).order('data_pedido').order('id')),
     supabaseClient.from('ficha_tecnica_itens').select('produto_id, quantidade, insumos(custo_unitario)'),
-    supabaseClient.from('metas').select('*').eq('mes_ano', mesSelecionado).order('criado_em'),
+    supabaseClient.from('metas').select('*').gte('mes_ano', mesInicio).lte('mes_ano', mesFim).order('mes_ano').order('criado_em'),
     supabaseClient.from('insumos').select('*, estoque_insumos(saldo_atual)').eq('ativo', true),
     supabaseClient.from('embalagens').select('*, estoque_embalagens(saldo_atual)'),
     supabaseClient.from('compras').select('*, fornecedores(nome), compra_itens(quantidade, custo_unitario)').eq('status', 'pedido'),
@@ -85,36 +180,30 @@ async function carregarDashboard(){
     custoUnitarioPorProduto[item.produto_id] = (custoUnitarioPorProduto[item.produto_id] || 0) + Number(item.quantidade) * custoInsumo;
   });
 
-  // -------- resultado do mês (mesma conta da DRE em Controle de caixa) --------
+  // -------- resultado do período (mesma conta da DRE em Controle de caixa) --------
   const pedidosPorMes = {};
   (respPedidos6Meses.data || []).forEach(p => { (pedidosPorMes[p.data_pedido.slice(0, 7)] = pedidosPorMes[p.data_pedido.slice(0, 7)] || []).push(p); });
   const lancamentosPorMes = {};
   (respFinanceiro6Meses.data || []).forEach(l => { (lancamentosPorMes[l.data.slice(0, 7)] = lancamentosPorMes[l.data.slice(0, 7)] || []).push(l); });
-  const resultadoDoMes = chave => calcularResultadoMes(pedidosPorMes[chave] || [], lancamentosPorMes[chave] || [], custoUnitarioPorProduto);
+  const noIntervalo = (campo, de, ate) => x => x[campo] >= de && x[campo] <= ate;
+  const pedidosDoIntervalo = (de, ate) => (respPedidos6Meses.data || []).filter(noIntervalo('data_pedido', de, ate));
+  const lancamentosDoIntervalo = (de, ate) => (respFinanceiro6Meses.data || []).filter(noIntervalo('data', de, ate));
+  const resultadoDe = (pedidos, lancamentos) => calcularResultadoMes(pedidos, lancamentos, custoUnitarioPorProduto);
+  const resultadoDoMes = chave => resultadoDe(pedidosPorMes[chave] || [], lancamentosPorMes[chave] || []);
 
   // margem de contribuição = receita líquida − CMV − taxas − despesas VARIÁVEIS lançadas (categorias com natureza "variável").
   // Impostos e CMV manual já estão na receita líquida / no CMV, então ficam de fora para não contar duas vezes.
-  const despesasVariaveisLancadas = chave => (lancamentosPorMes[chave] || [])
+  const despesasVariaveisLancadas = lancamentos => lancamentos
     .filter(l => !ehLancamentoAutomatico(l) && l.tipo === 'saida' && l.categorias_financeiras && l.categorias_financeiras.natureza === 'variavel'
       && !['impostos', 'cmv'].includes(grupoDoLancamento(l)))
     .reduce((s, l) => s + Number(l.valor), 0);
-  const margemContribuicaoDoMes = chave => {
-    const r = resultadoDoMes(chave);
-    return r.receitaLiquida - r.cmv - r.taxas - despesasVariaveisLancadas(chave);
-  };
+  const margemContribuicaoDe = (resultadoPeriodo, lancamentos) => resultadoPeriodo.receitaLiquida - resultadoPeriodo.cmv - resultadoPeriodo.taxas - despesasVariaveisLancadas(lancamentos);
 
-  const hoje = agoraBrasilia();
-  const mesDeHoje = mesAnoLocal(hoje);
-  const pedidosMes = pedidosPorMes[mesSelecionado] || [];
-  const resultado = resultadoDoMes(mesSelecionado);
-
-  // mês em andamento: compara com o MESMO trecho do mês anterior (dia 1 até hoje).
-  // Comparar 4 dias com o mês anterior inteiro faria tudo parecer queda.
-  const comparandoParcial = mesSelecionado === mesDeHoje;
-  const diaCorte = hoje.getDate();
-  const pedidosMesAnterior = (pedidosPorMes[mesAnteriorChave] || []).filter(p => !comparandoParcial || Number(p.data_pedido.slice(8, 10)) <= diaCorte);
-  const resultadoAnterior = calcularResultadoMes(pedidosMesAnterior, [], custoUnitarioPorProduto);
-  const rotuloAnterior = comparandoParcial ? `Mês ant. (até dia ${diaCorte})` : 'Mês ant.';
+  const pedidosPeriodo = pedidosDoIntervalo(inicio, fim);
+  const lancamentosPeriodo = lancamentosDoIntervalo(inicio, fim);
+  const resultado = resultadoDe(pedidosPeriodo, lancamentosPeriodo);
+  const pedidosAnteriores = pedidosDoIntervalo(inicioAnt, fimAnt);
+  const resultadoAnterior = resultadoDe(pedidosAnteriores, []);
 
   // KPIs de pedidos
   const atual = {
@@ -128,19 +217,22 @@ async function carregarDashboard(){
     custoTotal: resultadoAnterior.cmvVendas, taxaMaquininha: resultadoAnterior.taxas, frete: resultadoAnterior.frete,
   };
   const margemPercentual = resultado.receitaLiquida > 0 ? (resultado.lucroBruto / resultado.receitaLiquida) * 100 : 0;
-  const margemContribuicao = margemContribuicaoDoMes(mesSelecionado);
+  const margemContribuicao = margemContribuicaoDe(resultado, lancamentosPeriodo);
   const margemContribuicaoPercentual = resultado.receitaLiquida > 0 ? (margemContribuicao / resultado.receitaLiquida) * 100 : 0;
-  const caixaTotal = respCaixaTotal.error ? null : respCaixaTotal.data.reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
+  const sinal = l => l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor);
+  // saldo no fim do mês final menos o que foi lançado depois da data final dentro desse mês = saldo na data final
+  const caixaFimDoMes = respCaixaTotal.error ? null : respCaixaTotal.data.reduce((s, l) => s + sinal(l), 0);
+  const caixaTotal = caixaFimDoMes === null ? null : caixaFimDoMes - (lancamentosPorMes[mesFim] || []).filter(l => l.data > fim).reduce((s, l) => s + sinal(l), 0);
   const margemLiquidaPercentual = resultado.receitaLiquida > 0 ? (resultado.lucroPrejuizo / resultado.receitaLiquida) * 100 : 0;
 
   // produtos vendidos no mês sem ficha técnica (custo zero distorce o lucro)
-  const semFicha = [...new Set(pedidosMes.flatMap(p => p.pedido_itens)
+  const semFicha = [...new Set(pedidosPeriodo.flatMap(p => p.pedido_itens)
     .filter(i => i.produtos && !(custoUnitarioPorProduto[i.produto_id] > 0))
     .map(i => i.produtos.nome))];
 
   // -------- top 10 produtos vendidos no período (agrupado por produto, não por nome) --------
   const ranking = {};
-  pedidosMes.forEach(pedido => {
+  pedidosPeriodo.forEach(pedido => {
     pedido.pedido_itens.forEach(item => {
       if (!item.produtos) return;
       if (!ranking[item.produto_id]) ranking[item.produto_id] = { nome: item.produtos.nome, quantidade: 0, valor: 0 };
@@ -173,48 +265,53 @@ async function carregarDashboard(){
   const comprasAbertas = (respComprasAbertas.data || []).slice().sort((a, b) => a.data_compra.localeCompare(b.data_compra));
   const totalComprasAbertas = comprasAbertas.reduce((s, c) => s + c.compra_itens.reduce((s2, i) => s2 + Number(i.quantidade) * Number(i.custo_unitario), 0), 0);
 
-  // -------- meta: valor (faturamento / meta) e prazo (dias decorridos do mês) --------
-  const [anoSel, mesSel] = mesSelecionado.split('-').map(Number);
-  const diasNoMes = new Date(anoSel, mesSel, 0).getDate();
-  const percentualPrazo = mesSelecionado < mesDeHoje ? 100 : (mesSelecionado > mesDeHoje ? 0 : (hoje.getDate() / diasNoMes) * 100);
+  // -------- meta: valor (faturamento / meta) e prazo (dias decorridos do mês da meta) --------
+  const percentualPrazoDoMes = chave => chave < hojeIso.slice(0, 7) ? 100 : (chave > hojeIso.slice(0, 7) ? 0 : (Number(hojeIso.slice(8, 10)) / Number(limitesDoMes(chave).ultimoDia.slice(8, 10))) * 100);
+  const periodoDeUmMes = mesInicio === mesFim; // dentro de um mês só: a meta é comparada com o faturamento do período filtrado
 
-  // -------- série diária: faturamento (itens − desconto) por dia, mês selecionado x anterior --------
-  function valorPorDia(pedidos){
-    const mapa = {};
+  // -------- série de faturamento (itens − desconto): período selecionado x período anterior, alinhados pelo dia --------
+  // até ~3 meses mostra dia a dia; períodos maiores ficam semanais para o gráfico continuar legível
+  const tamanhoBloco = nDias <= 92 ? 1 : 7;
+  const totalBlocos = Math.ceil((diasEntreISO(inicio, fim) + 1) / tamanhoBloco);
+  function valorPorBloco(pedidos, dataBase){
+    const blocos = new Array(totalBlocos).fill(0);
     pedidos.forEach(pedido => {
-      const dia = Number(pedido.data_pedido.slice(8, 10));
+      const indice = Math.floor(diasEntreISO(dataBase, pedido.data_pedido) / tamanhoBloco);
+      if (indice < 0 || indice >= totalBlocos) return;
       const bruto = pedido.pedido_itens.reduce((s, item) => s + Number(item.quantidade) * Number(item.preco_unitario), 0);
-      mapa[dia] = (mapa[dia] || 0) + bruto - Math.min(bruto, Number(pedido.desconto || 0));
+      blocos[indice] += bruto - Math.min(bruto, Number(pedido.desconto || 0));
     });
-    return mapa;
+    return blocos;
   }
-  const porDiaAtual = valorPorDia(pedidosMes);
-  const porDiaAnterior = valorPorDia(pedidosPorMes[mesAnteriorChave] || []);
-  const diasNoMesAnterior = new Date(anoSel, mesSel - 1, 0).getDate();
-  const dias = Array.from({ length: Math.max(diasNoMes, diasNoMesAnterior) }, (_, i) => i + 1);
-  const serieAtual = dias.map(d => d <= diasNoMes ? (porDiaAtual[d] || 0) : null);
-  const serieAnterior = dias.map(d => d <= diasNoMesAnterior ? (porDiaAnterior[d] || 0) : null);
+  const dias = Array.from({ length: totalBlocos }, (_, i) => {
+    const iso = somarDiasISO(inicio, i * tamanhoBloco);
+    return tamanhoBloco === 1 && nDias <= 31 && periodoDeUmMes ? String(Number(iso.slice(8, 10))) : iso.slice(8, 10) + '/' + iso.slice(5, 7);
+  });
+  const serieAtual = valorPorBloco(pedidosPeriodo, inicio);
+  const nDiasAnterior = diasEntreISO(inicioAnt, fimAnt) + 1;
+  const serieAnterior = valorPorBloco(pedidosAnteriores, inicioAnt).map((v, i) => i * tamanhoBloco < nDiasAnterior ? v : null);
+  const rotuloEixoX = tamanhoBloco === 1 ? (periodoDeUmMes && nDias <= 31 ? 'Dia do mês' : 'Dia') : 'Semana (data de início)';
 
-  // -------- série mensal (6 meses até o período): receita líquida x custos e despesas, e o lucro --------
+  // -------- série mensal (6 meses até o mês final): receita líquida x custos e despesas, e o lucro --------
   const mesesRotulo = [], receitaPorMes = [], custosPorMes = [], lucroPorMes = [], margemPorMes = [], caixaPorMes = [];
   const chavesMeses = [];
   for (let i = 5; i >= 0; i--){
-    const chave = deslocarMes(mesSelecionado, -i);
+    const chave = deslocarMes(mesFim, -i);
     const [a, m] = chave.split('-').map(Number);
     mesesRotulo.push(new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
     const r = resultadoDoMes(chave);
     receitaPorMes.push(r.receitaLiquida);
     custosPorMes.push(r.receitaLiquida - r.lucroPrejuizo);
     lucroPorMes.push(r.lucroPrejuizo);
-    margemPorMes.push(margemContribuicaoDoMes(chave));
+    margemPorMes.push(margemContribuicaoDe(r, lancamentosPorMes[chave] || []));
     chavesMeses.push(chave);
   }
-  // total em caixa no fim de cada mês: parte do saldo final e volta mês a mês, desfazendo o movimento de cada um
-  if (caixaTotal !== null){
-    let saldo = caixaTotal;
+  // total em caixa no fim de cada mês: parte do saldo do fim do mês final e volta mês a mês, desfazendo o movimento de cada um
+  if (caixaFimDoMes !== null){
+    let saldo = caixaFimDoMes;
     for (let i = chavesMeses.length - 1; i >= 0; i--){
       caixaPorMes[i] = saldo;
-      saldo -= (lancamentosPorMes[chavesMeses[i]] || []).reduce((s, l) => s + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor)), 0);
+      saldo -= (lancamentosPorMes[chavesMeses[i]] || []).reduce((s, l) => s + sinal(l), 0);
     }
   }
 
@@ -247,15 +344,19 @@ async function carregarDashboard(){
   const vazio = texto => `<div class="dash-vazio">${texto}</div>`;
   const badge = n => n > 0 ? `<span class="badge-estoque-baixo">${n}</span>` : '';
 
+  const rotuloMesMeta = chave => { const [a, m] = chave.split('-').map(Number); return new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); };
   const faixaMeta = (respMetas.data || []).length === 0
-    ? `<div class="meta-faixa" data-ir-aba="configuracoes" role="link" tabindex="0"><div class="dash-vazio" style="padding:0;">Nenhuma meta para este mês — cadastre em Configurações.</div></div>`
-    : `<div class="meta-faixa">${respMetas.data.map(meta => `
+    ? `<div class="meta-faixa" data-ir-aba="configuracoes" role="link" tabindex="0"><div class="dash-vazio" style="padding:0;">Nenhuma meta para este período — cadastre em Configurações.</div></div>`
+    : `<div class="meta-faixa">${respMetas.data.map(meta => {
+        // período dentro de um mês: faturamento do período; vários meses: faturamento do mês de cada meta
+        const faturado = periodoDeUmMes ? atual.faturamento : resultadoDoMes(meta.mes_ano).receitaProdutos;
+        return `
         <div class="meta-linha">
-          <div class="meta-nome">${esc(meta.nome)}</div>
-          ${barraProgresso('Faturamento: ' + formatarMoeda(atual.faturamento) + ' de ' + formatarMoeda(Number(meta.valor_meta)), (atual.faturamento / Number(meta.valor_meta)) * 100, 'var(--verde)')}
-          ${barraProgresso('Prazo do mês', percentualPrazo, 'var(--rosa)')}
-        </div>
-      `).join('')}</div>`;
+          <div class="meta-nome">${esc(meta.nome)}${periodoDeUmMes ? '' : ' — ' + esc(rotuloMesMeta(meta.mes_ano))}</div>
+          ${barraProgresso('Faturamento: ' + formatarMoeda(faturado) + ' de ' + formatarMoeda(Number(meta.valor_meta)), (faturado / Number(meta.valor_meta)) * 100, 'var(--verde)')}
+          ${barraProgresso('Prazo do mês', percentualPrazoDoMes(meta.mes_ano), 'var(--rosa)')}
+        </div>`;
+      }).join('')}</div>`;
 
   container.innerHTML = `
     <!-- 1. KPIs + faturamento dia a dia com meta -->
@@ -267,7 +368,7 @@ async function carregarDashboard(){
         ${cardKpi('Ticket médio', atual.ticketMedio, anterior.ticketMedio, formatarMoeda)}
       </div>
       <div class="cartao-item cartao-grafico">
-        <div class="titulo-item"><span>Faturamento dia a dia</span></div>
+        <div class="titulo-item"><span>Faturamento ${tamanhoBloco === 1 ? 'dia a dia' : 'por semana'}</span></div>
         <div class="grafico-caixa"><canvas id="graficoVendasPorDia"></canvas></div>
         ${faixaMeta}
       </div>
@@ -329,10 +430,10 @@ async function carregarDashboard(){
     <!-- 4. Financeiro estratégico -->
     <div class="barra-modulo" style="margin:14px 0 -8px;"><h2>Financeiro estratégico</h2></div>
     <p class="dash-nota">O lucro daqui é o mesmo da DRE em Controle de caixa (regime de competência): vendas − descontos + frete − impostos − custo dos produtos vendidos (CMV a custo médio, congelado na data da venda) − taxas − despesas lançadas. Compras de insumos não são despesa até o produto ser vendido.</p>
-    ${semFicha.length > 0 ? `<p class="dash-nota" style="color:var(--vermelho);">⚠ Vendidos neste mês sem ficha técnica (custo zero, lucro superestimado): ${semFicha.slice(0, 5).map(esc).join(', ')}${semFicha.length > 5 ? ` e mais ${semFicha.length - 5}` : ''}.</p>` : ''}
+    ${semFicha.length > 0 ? `<p class="dash-nota" style="color:var(--vermelho);">⚠ Vendidos neste período sem ficha técnica (custo zero, lucro superestimado): ${semFicha.slice(0, 5).map(esc).join(', ')}${semFicha.length > 5 ? ` e mais ${semFicha.length - 5}` : ''}.</p>` : ''}
     <div class="dash-financeiro">
       <div class="cartao-item cartao-grafico">
-        <div class="titulo-item"><span>Receita x custos e despesas (6 meses)</span></div>
+        <div class="titulo-item"><span>Receita x custos e despesas (6 meses até o mês final)</span></div>
         <div class="grafico-caixa grafico-alto"><canvas id="graficoCrescimentoFinanceiro"></canvas></div>
         <div class="titulo-item grafico-subtitulo"><span>Margem de contribuição x total em caixa (fim de cada mês)</span></div>
         <div class="grafico-caixa grafico-alto"><canvas id="graficoMargemCaixa"></canvas></div>
@@ -352,7 +453,7 @@ async function carregarDashboard(){
           <div class="item-sub">Despesas operacionais, de vendas e diversas lançadas em Controle de caixa (já líquidas de receitas diversas).</div>
         </div>
         <div class="cartao-item kpi clicavel" data-ir-aba="caixa" role="link" tabindex="0">
-          <div class="kpi-titulo">Lucro do mês</div>
+          <div class="kpi-titulo">Lucro do período</div>
           <div class="kpi-valor" style="color:${resultado.lucroPrejuizo >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(resultado.lucroPrejuizo)}</div>
           <div class="linha-info"><span>Sobre a receita líquida</span><span>${margemLiquidaPercentual.toFixed(1)}%</span></div>
           <div class="item-sub">Lucro bruto − taxa − outras despesas. Detalhe na DRE.</div>
@@ -366,7 +467,7 @@ async function carregarDashboard(){
         <div class="cartao-item kpi clicavel" data-ir-aba="caixa" role="link" tabindex="0">
           <div class="kpi-titulo">Total em caixa</div>
           <div class="kpi-valor" style="color:${caixaTotal !== null && caixaTotal < 0 ? 'var(--vermelho)' : 'var(--marrom-escuro)'};">${caixaTotal === null ? '—' : formatarMoeda(caixaTotal)}</div>
-          <div class="item-sub">Entradas − saídas acumuladas ${mesSelecionado === mesDeHoje ? 'até hoje' : 'até o fim do mês selecionado'} (não é conciliado com o extrato do banco).</div>
+          <div class="item-sub">Entradas − saídas acumuladas ${fim >= hojeIso ? 'até hoje' : 'até ' + formatarDataBR(fim)} (não é conciliado com o extrato do banco).</div>
         </div>
       </div>
     </div>
@@ -378,13 +479,13 @@ async function carregarDashboard(){
     elemento.addEventListener('keydown', evento => { if (evento.key === 'Enter') ir(); });
   });
 
-  desenharGraficoVendas(dias, serieAtual, serieAnterior);
+  desenharGraficoVendas(dias, serieAtual, serieAnterior, rotuloEixoX);
   desenharGraficoCrescimento(mesesRotulo, receitaPorMes, custosPorMes, lucroPorMes);
   desenharGraficoMargemCaixa(mesesRotulo, margemPorMes, caixaPorMes);
 }
 
 let graficoVendasInstancia = null;
-function desenharGraficoVendas(dias, serieAtual, serieAnterior){
+function desenharGraficoVendas(dias, serieAtual, serieAnterior, rotuloEixoX){
   const canvas = document.getElementById('graficoVendasPorDia');
   if (!canvas || typeof Chart === 'undefined') return;
   if (graficoVendasInstancia) graficoVendasInstancia.destroy();
@@ -395,7 +496,7 @@ function desenharGraficoVendas(dias, serieAtual, serieAnterior){
       labels: dias,
       datasets: [
         { label: 'Período selecionado', data: serieAtual, borderColor: '#E0709A', backgroundColor: 'rgba(224, 112, 154, 0.15)', fill: true, tension: 0.35, pointRadius: 2 },
-        { label: 'Mês anterior', data: serieAnterior, borderColor: '#C9946B', backgroundColor: 'rgba(201, 148, 107, 0.08)', borderDash: [5, 4], fill: true, tension: 0.35, pointRadius: 2 },
+        { label: 'Período anterior', data: serieAnterior, borderColor: '#C9946B', backgroundColor: 'rgba(201, 148, 107, 0.08)', borderDash: [5, 4], fill: true, tension: 0.35, pointRadius: 2 },
       ],
     },
     options: {
@@ -403,7 +504,7 @@ function desenharGraficoVendas(dias, serieAtual, serieAnterior){
       maintainAspectRatio: false,
       plugins: { legend: { position: 'bottom', labels: { color: '#3A2A1C', font: { family: 'Poppins' } } } },
       scales: {
-        x: { title: { display: true, text: 'Dia do mês' }, ticks: { color: '#8B5A2B' } },
+        x: { title: { display: true, text: rotuloEixoX }, ticks: { color: '#8B5A2B' } },
         y: { ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
       },
     },

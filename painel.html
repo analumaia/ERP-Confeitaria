@@ -32,9 +32,17 @@
   <section class="conteudo-modulo" data-modulo="dashboard">
     <div class="barra-modulo">
       <h2>Visão geral do negócio</h2>
-      <div class="filtro-periodo">
-        <label for="filtroMesDashboard">Período:</label>
-        <input type="month" id="filtroMesDashboard">
+      <div class="filtro-periodo filtro-periodo-largo filtro-dashboard">
+        <label for="dashDe">Período:</label>
+        <input type="date" id="dashDe" aria-label="Data inicial">
+        <span>até</span>
+        <input type="date" id="dashAte" aria-label="Data final">
+        <div class="chips-periodo">
+          <button type="button" class="chip-periodo" data-periodo-dash="mes">Este mês</button>
+          <button type="button" class="chip-periodo" data-periodo-dash="anterior">Mês anterior</button>
+          <button type="button" class="chip-periodo" data-periodo-dash="3meses">3 meses</button>
+          <button type="button" class="chip-periodo" data-periodo-dash="ano">Este ano</button>
+        </div>
       </div>
     </div>
     <div class="dashboard" id="listaDashboard"></div>

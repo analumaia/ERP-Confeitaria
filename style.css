@@ -1519,3 +1519,11 @@ h1, h2, h3, .fonte-titulo{
 .canal-imposto{ display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; margin-bottom: 14px; }
 .canal-imposto input{ width: 100%; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--marrom-claro); background: var(--branco); color: var(--marrom-escuro); font-family: inherit; font-size: 0.85rem; }
 @media (max-width: 640px){ .canal-imposto{ grid-template-columns: 90px 1fr; } }
+
+/* Visão geral: filtro de período personalizado */
+.filtro-dashboard{ margin-bottom: 0; }
+.chip-periodo.ativo{ background: var(--rosa); color: #fff; }
+@media (max-width: 700px){
+  .filtro-dashboard{ width: 100%; }
+  .filtro-dashboard .chips-periodo{ margin-left: 0; width: 100%; }
+}

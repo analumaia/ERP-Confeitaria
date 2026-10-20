@@ -154,8 +154,6 @@ async function montarDashboard(){
   // um conjunto só de pedidos e lançamentos cobrindo tudo: KPIs, DRE do período, comparação e gráficos
   // saem das MESMAS funções de cálculo (caixa.js)
   const buscaDesde = [seisMesesAtras.primeiroDia, inicioAnt, limitesDoMes(mesInicio).primeiroDia].sort()[0];
-  const diaSeguinteAoMes = limitesDoMes(deslocarMes(mesFim, 1)).primeiroDia;
-  const promessaCaixaTotal = buscarLancamentosAnterioresCaixa(diaSeguinteAoMes); // tudo que entrou e saiu até o fim do mês final (caixa.js)
   const respostas = await Promise.all([
     buscarPaginado(() => supabaseClient.from('lancamentos_financeiros').select('id, tipo, valor, data, origem, categoria, categorias_financeiras(grupo_dre, natureza)').gte('data', buscaDesde).lte('data', limFim.ultimoDia).order('data').order('id')),
     buscarPaginado(() => supabaseClient.from('pedidos').select(SELECT_PEDIDOS_RESULTADO).eq('status', 'confirmado').gte('data_pedido', buscaDesde).lte('data_pedido', limFim.ultimoDia).order('data_pedido').order('id')),
@@ -169,7 +167,6 @@ async function montarDashboard(){
     supabaseClient.from('producoes_fichas').select('data_producao, quantidade_produzida, observacao, criado_em, receitas(nome, rendimento_unidade)').order('data_producao', { ascending: false }).order('criado_em', { ascending: false }).limit(8),
   ]);
 
-  const respCaixaTotal = await promessaCaixaTotal;
   if (requisicao !== dashboardRequisicao) return; // o período mudou enquanto carregava
 
   // producoes_fichas pode não existir em bancos antigos: não derruba o painel inteiro por isso
@@ -236,10 +233,6 @@ async function montarDashboard(){
   const margemPercentual = resultado.receitaLiquida > 0 ? (resultado.lucroBruto / resultado.receitaLiquida) * 100 : 0;
   const margemContribuicao = margemContribuicaoDe(resultado, lancamentosPeriodo);
   const margemContribuicaoPercentual = resultado.receitaLiquida > 0 ? (margemContribuicao / resultado.receitaLiquida) * 100 : 0;
-  const sinal = l => l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor);
-  // saldo no fim do mês final menos o que foi lançado depois da data final dentro desse mês = saldo na data final
-  const caixaFimDoMes = respCaixaTotal.error ? null : respCaixaTotal.data.reduce((s, l) => s + sinal(l), 0);
-  const caixaTotal = caixaFimDoMes === null ? null : caixaFimDoMes - (lancamentosPorMes[mesFim] || []).filter(l => String(l.data).slice(0, 10) > fim).reduce((s, l) => s + sinal(l), 0);
   const margemLiquidaPercentual = resultado.receitaLiquida > 0 ? (resultado.lucroPrejuizo / resultado.receitaLiquida) * 100 : 0;
 
   // produtos vendidos no mês sem ficha técnica (custo zero distorce o lucro)
@@ -309,25 +302,6 @@ async function montarDashboard(){
   const serieAnterior = valorPorBloco(pedidosAnteriores, inicioAnt).map((v, i) => i * tamanhoBloco < nDiasAnterior ? v : null);
   const rotuloEixoX = tamanhoBloco === 1 ? (periodoDeUmMes && nDias <= 31 ? 'Dia do mês' : 'Dia') : 'Semana (data de início)';
 
-  // -------- margem de contribuição ACUMULADA no período (valor e % média sobre a receita líquida) --------
-  const margemBloco = new Array(totalBlocos).fill(0), receitaBloco = new Array(totalBlocos).fill(0);
-  const pedidosDoBloco = Array.from({ length: totalBlocos }, () => []), lancamentosDoBloco = Array.from({ length: totalBlocos }, () => []);
-  const indiceDoBloco = data => Math.floor(diasEntreISO(inicio, String(data).slice(0, 10)) / tamanhoBloco);
-  pedidosPeriodo.forEach(p => { const i = indiceDoBloco(p.data_pedido); if (i >= 0 && i < totalBlocos) pedidosDoBloco[i].push(p); });
-  lancamentosPeriodo.forEach(l => { const i = indiceDoBloco(l.data); if (i >= 0 && i < totalBlocos) lancamentosDoBloco[i].push(l); });
-  for (let i = 0; i < totalBlocos; i++){
-    const r = resultadoDe(pedidosDoBloco[i], lancamentosDoBloco[i]);
-    margemBloco[i] = margemContribuicaoDe(r, lancamentosDoBloco[i]);
-    receitaBloco[i] = r.receitaLiquida;
-  }
-  let margemAcumulada = 0, receitaAcumulada = 0;
-  const serieMargemAcumulada = [], serieMargemPercentual = [];
-  for (let i = 0; i < totalBlocos; i++){
-    if (somarDiasISO(inicio, i * tamanhoBloco) > fimEfetivo){ serieMargemAcumulada.push(null); serieMargemPercentual.push(null); continue; } // não desenha o futuro
-    margemAcumulada += margemBloco[i]; receitaAcumulada += receitaBloco[i];
-    serieMargemAcumulada.push(margemAcumulada);
-    serieMargemPercentual.push(receitaAcumulada > 0 ? (margemAcumulada / receitaAcumulada) * 100 : null);
-  }
   // custos fixos lançados no período: base do ponto de equilíbrio (quanto faturar para a margem cobrir os fixos)
   const custosFixosLancados = lancamentosPeriodo
     .filter(l => !ehLancamentoAutomatico(l) && l.tipo === 'saida' && l.categorias_financeiras && l.categorias_financeiras.natureza === 'fixo')
@@ -336,8 +310,7 @@ async function montarDashboard(){
   const pontoEquilibrio = margemContribuicaoPercentual > 0 ? custosFixosLancados / (margemContribuicaoPercentual / 100) : null;
 
   // -------- série mensal (6 meses até o mês final): receita líquida x custos e despesas, e o lucro --------
-  const mesesRotulo = [], receitaPorMes = [], custosPorMes = [], lucroPorMes = [], margemPorMes = [], caixaPorMes = [];
-  const chavesMeses = [];
+  const mesesRotulo = [], receitaPorMes = [], custosPorMes = [], lucroPorMes = [], margemPorMes = [];
   for (let i = 5; i >= 0; i--){
     const chave = deslocarMes(mesFim, -i);
     const [a, m] = chave.split('-').map(Number);
@@ -346,18 +319,7 @@ async function montarDashboard(){
     receitaPorMes.push(r.receitaLiquida);
     custosPorMes.push(r.receitaLiquida - r.lucroPrejuizo);
     lucroPorMes.push(r.lucroPrejuizo);
-    margemPorMes.push(margemContribuicaoDe(r, lancamentosPorMes[chave] || []));
-    chavesMeses.push(chave);
   }
-  // total em caixa no fim de cada mês: parte do saldo do fim do mês final e volta mês a mês, desfazendo o movimento de cada um
-  if (caixaFimDoMes !== null){
-    let saldo = caixaFimDoMes;
-    for (let i = chavesMeses.length - 1; i >= 0; i--){
-      caixaPorMes[i] = saldo;
-      saldo -= (lancamentosPorMes[chavesMeses[i]] || []).reduce((s, l) => s + sinal(l), 0);
-    }
-  }
-
   // -------- helpers de render --------
   function cardKpi(titulo, valorAtual, valorAnterior, formatarFn, aumentoBom = true){
     // sem base de comparação (anterior = 0) não existe variação percentual: mostra "—" em vez de inventar +100%
@@ -478,8 +440,6 @@ async function montarDashboard(){
       <div class="cartao-item cartao-grafico">
         <div class="titulo-item"><span>Receita x custos e despesas (6 meses até o mês final)</span></div>
         <div class="grafico-caixa grafico-alto"><canvas id="graficoCrescimentoFinanceiro"></canvas></div>
-        <div class="titulo-item grafico-subtitulo"><span>Margem de contribuição acumulada no período</span></div>
-        <div class="grafico-caixa grafico-alto"><canvas id="graficoMargemCaixa"></canvas></div>
       </div>
       <div class="kpi-grid">
         ${cardKpi('CMV (custo dos produtos vendidos)', atual.custoTotal, anterior.custoTotal, formatarMoeda, false)}
@@ -501,20 +461,21 @@ async function montarDashboard(){
           <div class="linha-info"><span>Sobre a receita líquida</span><span>${margemLiquidaPercentual.toFixed(1)}%</span></div>
           <div class="item-sub">Lucro bruto − taxa − outras despesas. Detalhe na DRE.</div>
         </div>
-        <div class="cartao-item kpi">
-          <div class="kpi-titulo">Margem de contribuição (acumulada no período)</div>
-          <div class="kpi-valor" style="color:${margemContribuicao >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(margemContribuicao)}</div>
-          <div class="linha-info"><span>Média sobre a receita líquida</span><span>${margemContribuicaoPercentual.toFixed(1)}%</span></div>
-          <div class="linha-info"><span>A cada R$ 100 faturados sobram</span><span>${formatarMoeda(margemContribuicaoPercentual)}</span></div>
-          <div class="linha-info"><span>Por pedido (média)</span><span>${formatarMoeda(margemPorPedido)}</span></div>
-          <div class="linha-info"><span>Custos fixos lançados</span><span>${formatarMoeda(custosFixosLancados)}</span></div>
-          <div class="linha-info"><span>Ponto de equilíbrio (faturamento)</span><span>${pontoEquilibrio === null ? '—' : formatarMoeda(pontoEquilibrio)}</span></div>
+        <div class="cartao-item kpi kpi-margem">
+          <div class="kpi-margem-topo">
+            <div>
+              <div class="kpi-titulo">Margem de contribuição (acumulada no período)</div>
+              <div class="kpi-valor kpi-valor-grande" style="color:${margemContribuicao >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${formatarMoeda(margemContribuicao)}</div>
+            </div>
+            <div class="kpi-margem-pct" style="color:${margemContribuicao >= 0 ? 'var(--verde)' : 'var(--vermelho)'};">${margemContribuicaoPercentual.toFixed(1)}%<small>média sobre a receita líquida</small></div>
+          </div>
+          <div class="kpi-margem-metricas">
+            <div class="metrica"><span>A cada R$ 100 faturados sobram</span><strong>${formatarMoeda(margemContribuicaoPercentual)}</strong></div>
+            <div class="metrica"><span>Por pedido (média)</span><strong>${formatarMoeda(margemPorPedido)}</strong></div>
+            <div class="metrica"><span>Custos fixos lançados</span><strong>${formatarMoeda(custosFixosLancados)}</strong></div>
+            <div class="metrica"><span>Ponto de equilíbrio (faturamento)</span><strong>${pontoEquilibrio === null ? '—' : formatarMoeda(pontoEquilibrio)}</strong></div>
+          </div>
           <div class="item-sub">Receita líquida − CMV − taxas − despesas variáveis lançadas. ${margemContribuicao - custosFixosLancados >= 0 ? 'Já cobre os fixos lançados' : 'Ainda não cobre os fixos lançados'} (${formatarMoeda(margemContribuicao - custosFixosLancados)}).</div>
-        </div>
-        <div class="cartao-item kpi clicavel" data-ir-aba="caixa" role="link" tabindex="0">
-          <div class="kpi-titulo">Total em caixa</div>
-          <div class="kpi-valor" style="color:${caixaTotal !== null && caixaTotal < 0 ? 'var(--vermelho)' : 'var(--marrom-escuro)'};">${caixaTotal === null ? '—' : formatarMoeda(caixaTotal)}</div>
-          <div class="item-sub">Entradas − saídas acumuladas ${fim >= hojeIso ? 'até hoje' : 'até ' + formatarDataBR(fim)} (não é conciliado com o extrato do banco).</div>
         </div>
       </div>
     </div>
@@ -528,7 +489,6 @@ async function montarDashboard(){
 
   desenharGraficoVendas(dias, serieAtual, serieAnterior, rotuloEixoX);
   desenharGraficoCrescimento(mesesRotulo, receitaPorMes, custosPorMes, lucroPorMes);
-  desenharGraficoMargemAcumulada(dias, serieMargemAcumulada, serieMargemPercentual);
 }
 
 let graficoVendasInstancia = null;
@@ -581,36 +541,6 @@ function desenharGraficoCrescimento(labels, receita, custos, lucro){
       scales: {
         x: { ticks: { color: '#8B5A2B' } },
         y: { ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
-      },
-    },
-  });
-}
-
-
-let graficoMargemAcumuladaInstancia = null;
-function desenharGraficoMargemAcumulada(labels, acumulada, percentual){
-  const canvas = document.getElementById('graficoMargemCaixa');
-  if (!canvas || typeof Chart === 'undefined') return;
-  if (graficoMargemAcumuladaInstancia) graficoMargemAcumuladaInstancia.destroy();
-
-  graficoMargemAcumuladaInstancia = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Margem acumulada (R$)', data: acumulada, yAxisID: 'y', borderColor: '#3F7D4E', backgroundColor: 'rgba(63, 125, 78, 0.15)', fill: true, tension: 0.3, pointRadius: 2 },
-        { label: 'Margem média (% da receita líquida)', data: percentual, yAxisID: 'y2', borderColor: '#C9946B', borderDash: [5, 4], tension: 0.3, pointRadius: 2 },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      spanGaps: false,
-      plugins: { legend: { position: 'bottom', labels: { color: '#3A2A1C', font: { family: 'Poppins' } } } },
-      scales: {
-        x: { ticks: { color: '#8B5A2B' } },
-        y: { position: 'left', ticks: { color: '#8B5A2B', callback: v => 'R$ ' + v } },
-        y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#8B5A2B', callback: v => v + '%' } },
       },
     },
   });

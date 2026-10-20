@@ -1527,3 +1527,19 @@ h1, h2, h3, .fonte-titulo{
   .filtro-dashboard{ width: 100%; }
   .filtro-dashboard .chips-periodo{ margin-left: 0; width: 100%; }
 }
+
+/* Financeiro estratégico: cards mais altos e margem de contribuição em largura total */
+.dash-financeiro .kpi-grid{ grid-auto-rows: minmax(132px, auto); gap: 16px; }
+.dash-financeiro .kpi{ padding: 18px 20px; gap: 8px; }
+.dash-financeiro .kpi-titulo{ font-size: 0.9rem; }
+.dash-financeiro .kpi-valor{ font-size: 1.6rem; }
+.kpi-margem{ grid-column: 1 / -1; gap: 14px !important; justify-content: flex-start; }
+.kpi-margem-topo{ display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dash-financeiro .kpi-valor-grande{ font-size: 2.1rem; margin-top: 4px; }
+.kpi-margem-pct{ font-size: 1.7rem; font-weight: 700; text-align: right; line-height: 1.1; }
+.kpi-margem-pct small{ display: block; font-size: 0.72rem; font-weight: 500; color: var(--marrom-cafe); margin-top: 2px; }
+.kpi-margem-metricas{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi-margem-metricas .metrica{ background: var(--bege-claro); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.kpi-margem-metricas .metrica span{ font-size: 0.76rem; color: var(--marrom-cafe); }
+.kpi-margem-metricas .metrica strong{ font-size: 1.15rem; color: var(--marrom-escuro); }
+@media (max-width: 700px){ .kpi-margem-metricas{ grid-template-columns: 1fr; } }

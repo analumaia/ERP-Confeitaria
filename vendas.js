@@ -568,6 +568,7 @@ document.getElementById('btnCancelarVenda').addEventListener('click', resetarFor
 // cliente e produto: digitar e pesquisar (a lista cresce com a base)
 ativarBuscaNoSelect(document.getElementById('campoClienteVenda'), { placeholder: 'Sem cliente — digite para buscar pelo nome', permitirVazio: true });
 ativarBuscaNoSelect(document.getElementById('campoProdutoVenda'), { placeholder: 'Digite para buscar o produto' });
+ativarBuscaNoSelect(document.getElementById('campoEmbalagemVenda'), { placeholder: 'Digite para buscar a embalagem' });
 
 document.getElementById('btnRegistrarVenda').addEventListener('click', async () => {
   if (itensVendaAtual.length === 0){

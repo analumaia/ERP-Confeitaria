@@ -565,6 +565,10 @@ function resetarFormularioNovaVenda(){
 
 document.getElementById('btnCancelarVenda').addEventListener('click', resetarFormularioNovaVenda);
 
+// cliente e produto: digitar e pesquisar (a lista cresce com a base)
+ativarBuscaNoSelect(document.getElementById('campoClienteVenda'), { placeholder: 'Sem cliente — digite para buscar pelo nome', permitirVazio: true });
+ativarBuscaNoSelect(document.getElementById('campoProdutoVenda'), { placeholder: 'Digite para buscar o produto' });
+
 document.getElementById('btnRegistrarVenda').addEventListener('click', async () => {
   if (itensVendaAtual.length === 0){
     mostrarToast('Adicione pelo menos um item ao pedido.', 'erro');

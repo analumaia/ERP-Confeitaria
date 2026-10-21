@@ -293,3 +293,117 @@ document.getElementById('btnCancelarModal').addEventListener('click', fecharModa
 modalOverlay.addEventListener('click', (evento) => {
   if (evento.target === modalOverlay) fecharModal();
 });
+
+// --------------------------------------------------------
+// Campo "digite e pesquise": transforma um <select> numa caixa de busca.
+// O <select> continua existindo (escondido) e é a fonte do valor: todo o código
+// que usa select.value / selectedOptions / innerHTML continua funcionando.
+// --------------------------------------------------------
+function semAcentos(texto){
+  return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+function ativarBuscaNoSelect(select, opcoes){
+  const config = Object.assign({ placeholder: 'Digite para pesquisar...', limite: 40 }, opcoes || {});
+  const envoltorio = document.createElement('div');
+  envoltorio.className = 'busca-select';
+  const entrada = document.createElement('input');
+  entrada.type = 'text';
+  entrada.className = 'busca-select-entrada';
+  entrada.placeholder = config.placeholder;
+  entrada.autocomplete = 'off';
+  entrada.setAttribute('role', 'combobox');
+  entrada.setAttribute('aria-expanded', 'false');
+  if (select.id) entrada.setAttribute('aria-label', (document.querySelector(`label[for="${select.id}"]`) || {}).textContent || config.placeholder);
+  const lista = document.createElement('ul');
+  lista.className = 'busca-select-lista';
+  lista.hidden = true;
+  lista.setAttribute('role', 'listbox');
+
+  select.parentNode.insertBefore(envoltorio, select);
+  envoltorio.append(entrada, lista, select);
+  select.classList.add('busca-select-original');
+  select.tabIndex = -1;
+  select.setAttribute('aria-hidden', 'true');
+
+  let indiceAtivo = -1;
+  const descritorValor = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+
+  const textoSelecionado = () => (select.value && select.selectedOptions[0]) ? select.selectedOptions[0].textContent : '';
+  function sincronizar(){ entrada.value = textoSelecionado(); }
+
+  // quem muda select.value por código (limpar o formulário, editar um pedido) também atualiza a caixa
+  Object.defineProperty(select, 'value', {
+    configurable: true,
+    get(){ return descritorValor.get.call(select); },
+    set(v){ descritorValor.set.call(select, v); sincronizar(); },
+  });
+  new MutationObserver(sincronizar).observe(select, { childList: true, subtree: true, characterData: true });
+
+  function fechar(){
+    lista.hidden = true; entrada.setAttribute('aria-expanded', 'false'); indiceAtivo = -1;
+  }
+  function escolher(valor){
+    select.value = valor;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    fechar();
+  }
+  function abrir(filtrar){
+    const termo = filtrar ? semAcentos(entrada.value) : '';
+    const todas = [...select.options];
+    const achadas = todas.filter(o => o.value !== '' ? semAcentos(o.textContent).includes(termo) : termo === '');
+    const itens = achadas.slice(0, config.limite);
+    lista.innerHTML = '';
+    itens.forEach(o => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.dataset.valor = o.value;
+      li.textContent = o.value === '' ? o.textContent : o.textContent;
+      if (o.value === '') li.classList.add('vazio');
+      if (o.value !== '' && o.value === select.value) li.classList.add('selecionado');
+      li.addEventListener('mousedown', e => { e.preventDefault(); escolher(o.value); }); // mousedown: antes do blur do campo
+      lista.appendChild(li);
+    });
+    if (achadas.length > itens.length){
+      const mais = document.createElement('li');
+      mais.className = 'mais'; mais.textContent = `Mostrando ${itens.length} de ${achadas.length} — continue digitando para filtrar`;
+      lista.appendChild(mais);
+    }
+    if (itens.length === 0){
+      const vazio = document.createElement('li');
+      vazio.className = 'mais'; vazio.textContent = 'Nada encontrado';
+      lista.appendChild(vazio);
+    }
+    indiceAtivo = itens.length > 0 && filtrar ? 0 : -1;
+    destacar();
+    lista.hidden = false; entrada.setAttribute('aria-expanded', 'true');
+  }
+  function opcoesVisiveis(){ return [...lista.querySelectorAll('li[data-valor]')]; }
+  function destacar(){
+    opcoesVisiveis().forEach((li, i) => li.classList.toggle('ativo', i === indiceAtivo));
+    const ativo = opcoesVisiveis()[indiceAtivo];
+    if (ativo) ativo.scrollIntoView({ block: 'nearest' });
+  }
+
+  entrada.addEventListener('focus', () => { entrada.select(); abrir(false); });
+  entrada.addEventListener('click', () => { if (lista.hidden) abrir(false); });
+  entrada.addEventListener('input', () => abrir(true));
+  entrada.addEventListener('keydown', e => {
+    const itens = opcoesVisiveis();
+    if (e.key === 'ArrowDown'){ e.preventDefault(); if (lista.hidden) abrir(true); else { indiceAtivo = Math.min(itens.length - 1, indiceAtivo + 1); destacar(); } }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); indiceAtivo = Math.max(0, indiceAtivo - 1); destacar(); }
+    else if (e.key === 'Enter'){
+      if (!lista.hidden && itens[indiceAtivo]){ e.preventDefault(); escolher(itens[indiceAtivo].dataset.valor); }
+      else if (!lista.hidden && itens.length === 1){ e.preventDefault(); escolher(itens[0].dataset.valor); }
+    }
+    else if (e.key === 'Escape'){ fechar(); sincronizar(); }
+  });
+  entrada.addEventListener('blur', () => {
+    // campo apagado = volta para a opção vazia (ex.: "Sem cliente"); texto que não escolheu nada volta ao que estava selecionado
+    if (config.permitirVazio && entrada.value.trim() === '' && select.value !== ''){
+      select.value = ''; select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    fechar(); sincronizar();
+  });
+  sincronizar();
+}

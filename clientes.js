@@ -32,7 +32,7 @@ async function carregarClientes(){
 
   const { data, error } = await supabaseClient
     .from('clientes')
-    .select('*, pedidos(status)')
+    .select('*, pedidos(status, data_pedido)')
     .order('nome');
 
   if (error){
@@ -51,28 +51,94 @@ function numeroComprasCliente(cliente){
   return (cliente.pedidos || []).filter(p => p.status === 'confirmado').length;
 }
 
+// Última compra = pedido confirmado mais recente. Dias sem comprar = de lá até hoje (Brasília).
+function ultimaCompraCliente(cliente){
+  const datas = (cliente.pedidos || []).filter(p => p.status === 'confirmado' && p.data_pedido).map(p => String(p.data_pedido).slice(0, 10));
+  return datas.length ? datas.sort().pop() : null;
+}
+function diasSemComprarCliente(cliente){
+  const ultima = ultimaCompraCliente(cliente);
+  if (!ultima) return null; // nunca comprou
+  return Math.max(0, Math.round((new Date(hojeISO() + 'T12:00:00') - new Date(ultima + 'T12:00:00')) / 86400000));
+}
+function semAcentosCliente(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function linkWhatsappCliente(telefone){
+  let n = String(telefone || '').replace(/\D/g, '');
+  if (n.length < 10) return null;
+  if (!n.startsWith('55')) n = '55' + n;
+  return `https://wa.me/${n}`;
+}
+
+function clientesFiltrados(){
+  const termo = semAcentosCliente(document.getElementById('buscaClientes').value).trim();
+  const termoNumeros = termo.replace(/\D/g, '');
+  const faixa = document.getElementById('filtroDiasSemComprar').value;
+  const diasCustom = Number(document.getElementById('filtroDiasCustom').value);
+  const minimo = faixa === 'custom' ? (diasCustom > 0 ? diasCustom : null) : (faixa && faixa !== 'nunca' ? Number(faixa) : null);
+
+  let lista = clientesCarregados.filter(c => {
+    if (termo){
+      const nomeOk = semAcentosCliente(c.nome).includes(termo);
+      const foneOk = termoNumeros.length >= 3 && String(c.telefone || '').replace(/\D/g, '').includes(termoNumeros);
+      if (!nomeOk && !foneOk) return false;
+    }
+    const dias = diasSemComprarCliente(c);
+    if (faixa === 'nunca') return dias === null;
+    if (minimo !== null) return dias !== null && dias >= minimo; // quem nunca comprou tem filtro próprio
+    return true;
+  });
+
+  const ordem = document.getElementById('ordenacaoClientes').value;
+  const diasOu = (c, vazio) => { const d = diasSemComprarCliente(c); return d === null ? vazio : d; };
+  if (ordem === 'mais_tempo') lista.sort((a, b) => diasOu(b, -1) - diasOu(a, -1) || a.nome.localeCompare(b.nome));
+  else if (ordem === 'menos_tempo') lista.sort((a, b) => diasOu(a, Infinity) - diasOu(b, Infinity) || a.nome.localeCompare(b.nome));
+  else if (ordem === 'mais_compras') lista.sort((a, b) => numeroComprasCliente(b) - numeroComprasCliente(a) || a.nome.localeCompare(b.nome));
+  return lista;
+}
+
 function renderizarClientes(){
   const grade = document.getElementById('listaClientes');
+  const resumo = document.getElementById('resumoFiltroClientes');
+  document.getElementById('filtroDiasCustom').hidden = document.getElementById('filtroDiasSemComprar').value !== 'custom';
 
   if (clientesCarregados.length === 0){
     grade.innerHTML = '<div class="lista-vazia" style="grid-column:1/-1;">Nenhum cliente cadastrado ainda. Cadastre o primeiro ao lado.</div>';
+    resumo.textContent = '';
     return;
   }
 
-  grade.innerHTML = clientesCarregados.map(cliente => `
+  const lista = clientesFiltrados();
+  resumo.textContent = lista.length === clientesCarregados.length
+    ? `${lista.length} cliente(s)`
+    : `${lista.length} de ${clientesCarregados.length} cliente(s) com este filtro`;
+  if (lista.length === 0){
+    grade.innerHTML = '<div class="lista-vazia" style="grid-column:1/-1;">Nenhum cliente encontrado com este filtro.</div>';
+    return;
+  }
+
+  grade.innerHTML = lista.map(cliente => {
+    const dias = diasSemComprarCliente(cliente);
+    const ultima = ultimaCompraCliente(cliente);
+    const zap = linkWhatsappCliente(cliente.telefone);
+    const textoDias = dias === null ? 'Nunca comprou' : (dias === 0 ? 'Hoje' : `${dias} dia${dias === 1 ? '' : 's'}`);
+    const corDias = dias === null ? 'var(--marrom-cafe)' : (dias >= 60 ? 'var(--vermelho)' : (dias >= 30 ? '#B7791F' : 'var(--verde)'));
+    return `
     <div class="cartao-item ficha-card">
       <div class="ficha-card-corpo">
         <div class="titulo-item"><span>${esc(cliente.nome)}</span></div>
         <div class="linha-info"><span>Telefone</span><span>${esc(cliente.telefone) || '—'}</span></div>
         <div class="linha-info"><span>Cep</span><span>${esc(cliente.cep) || '—'}</span></div>
         <div class="linha-info"><span>Nº de compras</span><span>${numeroComprasCliente(cliente)}</span></div>
+        <div class="linha-info"><span>Última compra</span><span>${ultima ? new Date(ultima + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
+        <div class="linha-info"><span>Sem comprar há</span><span style="font-weight:700; color:${corDias};">${textoDias}</span></div>
       </div>
-      <div class="ficha-card-acoes">
+      <div class="ficha-card-acoes${zap ? ' com-whatsapp' : ''}">
+        ${zap ? `<a class="ficha-btn-editar" href="${zap}" target="_blank" rel="noopener" style="text-decoration:none; text-align:center; display:flex; align-items:center; justify-content:center; background:#DDF3E2; color:#1F6B3A;">WhatsApp</a>` : ''}
         <button type="button" class="ficha-btn-excluir" data-excluir-cliente="${cliente.id}">Excluir</button>
         <button type="button" class="ficha-btn-editar" data-editar-cliente="${cliente.id}">Editar</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 
   grade.querySelectorAll('[data-editar-cliente]').forEach(botao => {
     botao.addEventListener('click', () => editarCliente(botao.dataset.editarCliente));
@@ -81,6 +147,10 @@ function renderizarClientes(){
     botao.addEventListener('click', () => excluirCliente(botao.dataset.excluirCliente));
   });
 }
+
+['buscaClientes', 'filtroDiasSemComprar', 'filtroDiasCustom', 'ordenacaoClientes'].forEach(id => {
+  document.getElementById(id).addEventListener(id === 'buscaClientes' || id === 'filtroDiasCustom' ? 'input' : 'change', renderizarClientes);
+});
 
 // --------------------------------------------------------
 // Busca de CEP (ViaCEP) — preenche e deixa editável

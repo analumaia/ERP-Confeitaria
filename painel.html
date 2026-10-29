@@ -710,7 +710,36 @@
       </form>
 
       <!-- Clientes cadastrados -->
-      <div class="lista-cards fichas-grade" id="listaClientes"></div>
+      <div class="clientes-direita">
+        <div class="filtro-periodo filtro-periodo-largo filtro-clientes">
+          <input type="search" id="buscaClientes" class="campo-busca" placeholder="Buscar por nome ou telefone" aria-label="Buscar cliente">
+          <div class="filtro-clientes-grupo">
+            <label for="filtroDiasSemComprar">Sem comprar há:</label>
+            <select id="filtroDiasSemComprar" class="campo-busca">
+              <option value="">Qualquer tempo</option>
+              <option value="15">15 dias ou mais</option>
+              <option value="30">30 dias ou mais</option>
+              <option value="60">60 dias ou mais</option>
+              <option value="90">90 dias ou mais</option>
+              <option value="180">180 dias ou mais</option>
+              <option value="nunca">Nunca compraram</option>
+              <option value="custom">Outro (digitar dias)…</option>
+            </select>
+            <input type="number" id="filtroDiasCustom" class="campo-busca" min="1" step="1" placeholder="dias" aria-label="Dias sem comprar" hidden style="max-width:90px;">
+          </div>
+          <div class="filtro-clientes-grupo">
+            <label for="ordenacaoClientes">Ordenar:</label>
+            <select id="ordenacaoClientes" class="campo-busca">
+              <option value="nome">Nome (A–Z)</option>
+              <option value="mais_tempo">Mais tempo sem comprar</option>
+              <option value="menos_tempo">Comprou há menos tempo</option>
+              <option value="mais_compras">Mais compras</option>
+            </select>
+          </div>
+        </div>
+        <div class="item-sub" id="resumoFiltroClientes" style="margin:-4px 4px 12px;"></div>
+        <div class="lista-cards fichas-grade" id="listaClientes"></div>
+      </div>
 
     </div>
   </section>

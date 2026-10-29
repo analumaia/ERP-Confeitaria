@@ -1559,3 +1559,14 @@ h1, h2, h3, .fonte-titulo{
 .busca-select-lista li.selecionado{ font-weight: 700; }
 .busca-select-lista li.vazio{ color: var(--marrom-cafe); font-style: italic; }
 .busca-select-lista li.mais{ cursor: default; font-size: 0.78rem; color: var(--marrom-cafe); background: none; }
+
+/* Clientes: filtro de dias sem comprar */
+.clientes-direita{ min-width: 0; }
+.ficha-card-acoes.com-whatsapp{ grid-template-columns: 1fr 1fr 1fr; }
+.filtro-clientes{ gap: 8px 10px; padding: 8px 12px; }
+.filtro-clientes #buscaClientes{ flex: 1 1 100%; max-width: none; }
+.filtro-clientes label{ white-space: nowrap; font-size: 0.82rem; font-weight: 600; }
+.filtro-clientes select{ max-width: 100%; }
+.filtro-clientes-grupo{ display: flex; align-items: center; gap: 8px; flex: 1 1 230px; min-width: 0; }
+.filtro-clientes-grupo select{ flex: 1; min-width: 0; max-width: none; }
+.filtro-clientes input#buscaClientes{ border: 1.5px solid var(--marrom-claro); background: var(--branco); padding: 10px 16px; border-radius: 999px; }

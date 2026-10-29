@@ -667,6 +667,12 @@
           </div>
 
           <div class="form-grupo">
+            <label for="campoAniversarioCliente">Data de aniversário</label>
+            <input type="date" id="campoAniversarioCliente">
+            <div class="item-sub">Se não souber o ano, use um qualquer (ex.: 2000) — o filtro usa só dia e mês.</div>
+          </div>
+
+          <div class="form-grupo">
             <label for="campoCepCliente">CEP</label>
             <div style="display:flex; gap:8px;">
               <input type="text" id="campoCepCliente" placeholder="00000-000" inputmode="numeric" maxlength="9" style="flex:1;">
@@ -728,11 +734,30 @@
             <input type="number" id="filtroDiasCustom" class="campo-busca" min="1" step="1" placeholder="dias" aria-label="Dias sem comprar" hidden style="max-width:90px;">
           </div>
           <div class="filtro-clientes-grupo">
+            <label for="filtroAniversario">Aniversário:</label>
+            <select id="filtroAniversario" class="campo-busca">
+              <option value="">Todos</option>
+              <option value="hoje">Hoje</option>
+              <option value="7">Próximos 7 dias</option>
+              <option value="30">Próximos 30 dias</option>
+              <option value="mes">Este mês</option>
+              <option value="proximo_mes">Próximo mês</option>
+              <option value="sem_data">Sem data cadastrada</option>
+              <optgroup label="Mês específico">
+                <option value="m1">Janeiro</option><option value="m2">Fevereiro</option><option value="m3">Março</option>
+                <option value="m4">Abril</option><option value="m5">Maio</option><option value="m6">Junho</option>
+                <option value="m7">Julho</option><option value="m8">Agosto</option><option value="m9">Setembro</option>
+                <option value="m10">Outubro</option><option value="m11">Novembro</option><option value="m12">Dezembro</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="filtro-clientes-grupo">
             <label for="ordenacaoClientes">Ordenar:</label>
             <select id="ordenacaoClientes" class="campo-busca">
               <option value="nome">Nome (A–Z)</option>
               <option value="mais_tempo">Mais tempo sem comprar</option>
               <option value="menos_tempo">Comprou há menos tempo</option>
+              <option value="proximo_aniversario">Próximo aniversário</option>
               <option value="mais_compras">Mais compras</option>
             </select>
           </div>

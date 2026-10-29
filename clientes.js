@@ -15,6 +15,7 @@ const formCliente = document.getElementById('formCliente');
 const campoNomeCliente = document.getElementById('campoNomeCliente');
 const campoTelefoneCliente = document.getElementById('campoTelefoneCliente');
 const campoCepCliente = document.getElementById('campoCepCliente');
+const campoAniversarioCliente = document.getElementById('campoAniversarioCliente');
 const campoRuaCliente = document.getElementById('campoRuaCliente');
 const campoBairroCliente = document.getElementById('campoBairroCliente');
 const campoNumeroCliente = document.getElementById('campoNumeroCliente');
@@ -69,6 +70,23 @@ function linkWhatsappCliente(telefone){
   return `https://wa.me/${n}`;
 }
 
+// Aniversário: usa só dia e mês. Quem nasceu em 29/02 comemora em 28/02 nos anos não bissextos.
+function proximoAniversarioCliente(cliente){
+  if (!cliente.data_aniversario) return null;
+  const [, mes, dia] = String(cliente.data_aniversario).slice(0, 10).split('-').map(Number);
+  const hojeStr = hojeISO();
+  const ano = Number(hojeStr.slice(0, 4));
+  const montar = a => {
+    const bissexto = (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0;
+    const d = (mes === 2 && dia === 29 && !bissexto) ? 28 : dia;
+    return `${a}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  let data = montar(ano);
+  if (data < hojeStr) data = montar(ano + 1);
+  const dias = Math.round((new Date(data + 'T12:00:00') - new Date(hojeStr + 'T12:00:00')) / 86400000);
+  return { dias, mes, dia };
+}
+
 function clientesFiltrados(){
   const termo = semAcentosCliente(document.getElementById('buscaClientes').value).trim();
   const termoNumeros = termo.replace(/\D/g, '');
@@ -82,6 +100,20 @@ function clientesFiltrados(){
       const foneOk = termoNumeros.length >= 3 && String(c.telefone || '').replace(/\D/g, '').includes(termoNumeros);
       if (!nomeOk && !foneOk) return false;
     }
+    const filtroAniv = document.getElementById('filtroAniversario').value;
+    if (filtroAniv){
+      const aniv = proximoAniversarioCliente(c);
+      const mesHoje = Number(hojeISO().slice(5, 7));
+      if (filtroAniv === 'sem_data'){ if (aniv) return false; }
+      else {
+        if (!aniv) return false;
+        if (filtroAniv === 'hoje' && aniv.dias !== 0) return false;
+        if ((filtroAniv === '7' || filtroAniv === '30') && aniv.dias > Number(filtroAniv)) return false;
+        if (filtroAniv === 'mes' && aniv.mes !== mesHoje) return false;
+        if (filtroAniv === 'proximo_mes' && aniv.mes !== (mesHoje % 12) + 1) return false;
+        if (/^m\d+$/.test(filtroAniv) && aniv.mes !== Number(filtroAniv.slice(1))) return false;
+      }
+    }
     const dias = diasSemComprarCliente(c);
     if (faixa === 'nunca') return dias === null;
     if (minimo !== null) return dias !== null && dias >= minimo; // quem nunca comprou tem filtro próprio
@@ -92,6 +124,7 @@ function clientesFiltrados(){
   const diasOu = (c, vazio) => { const d = diasSemComprarCliente(c); return d === null ? vazio : d; };
   if (ordem === 'mais_tempo') lista.sort((a, b) => diasOu(b, -1) - diasOu(a, -1) || a.nome.localeCompare(b.nome));
   else if (ordem === 'menos_tempo') lista.sort((a, b) => diasOu(a, Infinity) - diasOu(b, Infinity) || a.nome.localeCompare(b.nome));
+  else if (ordem === 'proximo_aniversario') lista.sort((a, b) => { const x = proximoAniversarioCliente(a), y = proximoAniversarioCliente(b); return (x ? x.dias : 9999) - (y ? y.dias : 9999) || a.nome.localeCompare(b.nome); });
   else if (ordem === 'mais_compras') lista.sort((a, b) => numeroComprasCliente(b) - numeroComprasCliente(a) || a.nome.localeCompare(b.nome));
   return lista;
 }
@@ -120,6 +153,8 @@ function renderizarClientes(){
     const dias = diasSemComprarCliente(cliente);
     const ultima = ultimaCompraCliente(cliente);
     const zap = linkWhatsappCliente(cliente.telefone);
+    const aniv = proximoAniversarioCliente(cliente);
+    const textoAniv = !aniv ? '—' : `${String(aniv.dia).padStart(2, '0')}/${String(aniv.mes).padStart(2, '0')}${aniv.dias === 0 ? ' — hoje! 🎂' : ` (em ${aniv.dias} dia${aniv.dias === 1 ? '' : 's'})`}`;
     const textoDias = dias === null ? 'Nunca comprou' : (dias === 0 ? 'Hoje' : `${dias} dia${dias === 1 ? '' : 's'}`);
     const corDias = dias === null ? 'var(--marrom-cafe)' : (dias >= 60 ? 'var(--vermelho)' : (dias >= 30 ? '#B7791F' : 'var(--verde)'));
     return `
@@ -128,6 +163,7 @@ function renderizarClientes(){
         <div class="titulo-item"><span>${esc(cliente.nome)}</span></div>
         <div class="linha-info"><span>Telefone</span><span>${esc(cliente.telefone) || '—'}</span></div>
         <div class="linha-info"><span>Cep</span><span>${esc(cliente.cep) || '—'}</span></div>
+        <div class="linha-info"><span>Aniversário</span><span style="${aniv && aniv.dias <= 7 ? 'font-weight:700; color:var(--rosa);' : ''}">${textoAniv}</span></div>
         <div class="linha-info"><span>Nº de compras</span><span>${numeroComprasCliente(cliente)}</span></div>
         <div class="linha-info"><span>Última compra</span><span>${ultima ? new Date(ultima + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
         <div class="linha-info"><span>Sem comprar há</span><span style="font-weight:700; color:${corDias};">${textoDias}</span></div>
@@ -148,7 +184,7 @@ function renderizarClientes(){
   });
 }
 
-['buscaClientes', 'filtroDiasSemComprar', 'filtroDiasCustom', 'ordenacaoClientes'].forEach(id => {
+['buscaClientes', 'filtroDiasSemComprar', 'filtroDiasCustom', 'filtroAniversario', 'ordenacaoClientes'].forEach(id => {
   document.getElementById(id).addEventListener(id === 'buscaClientes' || id === 'filtroDiasCustom' ? 'input' : 'change', renderizarClientes);
 });
 
@@ -198,6 +234,7 @@ function resetarFormularioCliente(){
   document.getElementById('tituloFormCliente').textContent = 'Novo cliente';
   campoNomeCliente.value = '';
   campoTelefoneCliente.value = '';
+  campoAniversarioCliente.value = '';
   campoCepCliente.value = '';
   campoRuaCliente.value = '';
   campoBairroCliente.value = '';
@@ -215,6 +252,7 @@ function editarCliente(id){
   document.getElementById('tituloFormCliente').textContent = 'Editar cliente';
   campoNomeCliente.value = cliente.nome || '';
   campoTelefoneCliente.value = cliente.telefone || '';
+  campoAniversarioCliente.value = cliente.data_aniversario ? String(cliente.data_aniversario).slice(0, 10) : '';
   campoCepCliente.value = cliente.cep || '';
   campoRuaCliente.value = cliente.rua || '';
   campoBairroCliente.value = cliente.bairro || '';
@@ -244,6 +282,7 @@ async function salvarCliente(){
   const dadosCliente = {
     nome,
     telefone: campoTelefoneCliente.value.trim() || null,
+    data_aniversario: campoAniversarioCliente.value || null,
     cep: campoCepCliente.value.trim() || null,
     rua: campoRuaCliente.value.trim() || null,
     bairro: campoBairroCliente.value.trim() || null,
@@ -266,8 +305,9 @@ async function salvarCliente(){
   btnSalvarCliente.textContent = 'Salvar';
 
   if (erro){
+    const semAniversario = String(erro.message || '').includes('data_aniversario');
     const semColunasNovas = String(erro.message || '').includes('numero') || String(erro.message || '').includes('uf');
-    mostrarToast(semColunasNovas ? 'Os campos Nº e UF ainda não existem no banco — rode o SQL de migração.' : 'Não foi possível salvar o cliente.', 'erro');
+    mostrarToast(semAniversario ? 'A coluna de aniversário ainda não existe no banco — rode o SQL migracao-clientes-aniversario.sql.' : semColunasNovas ? 'Os campos Nº e UF ainda não existem no banco — rode o SQL de migração.' : 'Não foi possível salvar o cliente.', 'erro');
     return;
   }
 

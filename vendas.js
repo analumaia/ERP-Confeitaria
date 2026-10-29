@@ -726,6 +726,7 @@ function montarHtmlComanda(pedido, config){
   ${desconto > 0 ? `<div class="linha-valor"><span>- Desconto</span><span>${m(desconto)}</span></div>` : ''}
   ${frete > 0 ? `<div class="linha-valor"><span>+ Entrega</span><span>${m(frete)}</span></div>` : ''}
   <div class="linha-valor total-final"><span>A PAGAR</span><span>${m(totalAPagar)}</span></div>
+  <div class="linha-valor"><span>Pagamento</span><span class="negrito" style="white-space:normal; text-align:right;">${pedido.formas_pagamento ? esc(pedido.formas_pagamento.nome) : 'Não definido'}</span></div>
 
   ${pedido.observacao ? `<div class="linha"></div><div>Obs: ${esc(pedido.observacao)}</div>` : ''}
   ${config.mensagem_rodape ? `<div class="linha"></div><div class="centro">${esc(config.mensagem_rodape).replace(/\n/g, '<br>')}</div>` : ''}

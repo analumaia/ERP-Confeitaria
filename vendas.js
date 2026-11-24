@@ -255,7 +255,11 @@ function verDetalhesVenda(id){
   const valorPedido = valorItens - desconto;
   const frete = Number(pedido.valor_frete || 0);
   const taxaPct = pedido.formas_pagamento ? Number(pedido.formas_pagamento.taxa_percentual) : 0;
-  const taxa = (valorPedido + frete) * (taxaPct / 100);
+  // CORREÇÃO: usa a taxa congelada no pedido (taxa_total), igual à tabela, ao resumo e à DRE.
+  // Só recalcula pelo % atual da forma de pagamento quando o pedido não tem taxa_total gravada.
+  const taxa = (pedido.taxa_total !== null && pedido.taxa_total !== undefined)
+    ? Number(pedido.taxa_total)
+    : (valorPedido + frete) * (taxaPct / 100);
   const valorFinal = valorPedido + frete - taxa;
   const dataFormatada = new Date(pedido.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR');
 
